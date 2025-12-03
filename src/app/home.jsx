@@ -10,13 +10,30 @@ export default function HomePage() {
   const [summary, setSummary] = useState("");
 
   const summarize = async () => {
-    const res = await fetch("/api/summarize", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: input }),
-    });
-    const data = await res.json();
-    setSummary(data.summary);
+    if (!input.trim()) {
+      alert("Please paste an article first");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: article }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        alert("Error: " + (error.error || "Failed to summarize"));
+        return;
+      }
+
+      const data = await res.json();
+      setSummary(data.summary);
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Failed to summarize. Check console for details.");
+    }
   };
 
   return (

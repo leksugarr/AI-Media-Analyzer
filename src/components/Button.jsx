@@ -1,7 +1,7 @@
 "use client";
 import { motion } from "framer-motion";
 
-export default function Button({ children }) {
+export default function Button({ children, ...props }) {
   return (
     <motion.button
       className="btn-primary"
@@ -11,6 +11,7 @@ export default function Button({ children }) {
       }}
       whileTap={{ scale: 0.95 }}
       transition={{ duration: 0.15 }}
+      {...props} // forward all props, including onClick
     >
       {children}
     </motion.button>
