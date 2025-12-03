@@ -1,1 +1,31 @@
 @import "tailwindcss";
+
+* {
+  @apply transition-all duration-300 ease-out;
+}
+
+body {
+  @apply bg-black text-white;
+  background: radial-gradient(circle at 40% 20%, #0a0f2d 0%, #000000 60%);
+}
+
+.input {
+  @apply w-full p-3 rounded-xl bg-neutral-900/60 
+         text-white placeholder-neutral-400
+         border border-white/10 backdrop-blur-xl
+         focus:border-blue-500 focus:bg-neutral-900/80
+         transition-all;
+}
+
+.btn-primary {
+  @apply w-full py-3 rounded-xl font-semibold 
+         bg-blue-600 hover:bg-blue-700 
+         active:scale-[0.97]
+         shadow-lg shadow-blue-600/30
+         transition-all;
+}
+
+.glass-card {
+  @apply bg-neutral-900/60 backdrop-blur-xl rounded-2xl
+         border border-white/10 shadow-xl;
+}

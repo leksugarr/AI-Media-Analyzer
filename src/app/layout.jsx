@@ -1,19 +1,31 @@
-export { Metadata } from "next";
+"use client";
 import "./global.css";
+export { Metadata } from "next";
+import { Inter } from "next/font/google";
+import { AnimatePresence, motion } from "framer-motion";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const Metadata = {
   title: "AI Media Analyzer",
-  description: "Summarize & analyze articles with AI",
+  description: "Smooth, premium animated UI",
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className="bg-black text-white font-sans">
-        <header className="p-4 flex justify-between items-center bg-gray-800/60 backdrop-blur-md">
-          <h1 className="text-xl font-bold">AI Media Analyzer</h1>
-        </header>
-        <main className="p-6">{children}</main>
+      <body className={inter.className}>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={Math.random()}
+            initial={{ opacity: 0, y: 0 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+          >
+            {children}
+          </motion.div>
+        </AnimatePresence>
       </body>
     </html>
   );

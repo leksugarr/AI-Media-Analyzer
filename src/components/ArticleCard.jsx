@@ -1,8 +1,9 @@
-export default function AticleCard({ title, content }) {
+export default function ArticleCard({ children, className }) {
   return (
-    <div className="p-4 bg-gray-800/50 backdrop-blur-md rounded-lg border border-gray-700">
-      <h2 className="text-lg font-bold mb-2">{title}</h2>
-      <p>{content}</p>
+    <div
+      className={`p-6 rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-lg ${className}`}
+    >
+      {children}
     </div>
   );
 }

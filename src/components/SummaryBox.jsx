@@ -1,7 +1,7 @@
 export default function SummaryBox({ summary }) {
   return (
-    <div className="p-4 bg-green-700/20 backdrop-blur-md rounded-lg border border-green-500">
-      <h3 className="font-semibold mb-2">Summary:</h3>
+    <div className="p-4 bg-green-600/20 border border-green-500 rounded-xl backdrop-blur-lg">
+      <h2 className="text-lg font-bold mb-2">Summary</h2>
       <p>{summary}</p>
     </div>
   );
