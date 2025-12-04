@@ -3,6 +3,7 @@ import "./global.css";
 export { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AnimatePresence, motion } from "framer-motion";
+import Navbar from "@/components/Navbar";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -15,6 +16,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={inter.className}>
+        <Navbar />
         <AnimatePresence mode="wait">
           <motion.div
             key={Math.random()}

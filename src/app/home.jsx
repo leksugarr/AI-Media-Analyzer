@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import Navbar from "@/components/Navbar";
 import ArticleCard from "@/components/ArticleCard";
 import SummaryBox from "../components/SummaryBox";
 import Button from "@/components/Button";
@@ -38,7 +37,6 @@ export default function HomePage() {
 
   return (
     <div>
-      <Navbar />
       <section className="min-h-screen pt-32 px-6">
         <div className="max-w-3xl mx-auto space-y-6">
           <ArticleCard>

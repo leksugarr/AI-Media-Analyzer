@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
 import ArticleCard from "@/components/ArticleCard";
 import Button from "@/components/Button";
 import { motion } from "framer-motion";
@@ -24,7 +23,6 @@ export default function LoginPage() {
 
   return (
     <div>
-      <Navbar />
       <div className="min-h-screen flex items-center justify-center px-6">
         <motion.div
           initial={{ opacity: 0, scale: 0.85 }}
