@@ -34,9 +34,6 @@ export default function Navbar() {
             <Link href="/login" className="hover:text-blue-400">
               Login
             </Link>
-            <Link href="/signup" className="hover:text-blue-400">
-              Sign Up
-            </Link>
           </div>
 
           {/* Hamburger Button */}
@@ -92,13 +89,6 @@ export default function Navbar() {
               onClick={() => setOpen(false)}
             >
               Login
-            </Link>
-            <Link
-              href="/signup"
-              className="text-lg hover:text-blue-400"
-              onClick={() => setOpen(false)}
-            >
-              Sign Up
             </Link>
           </motion.div>
         )}
