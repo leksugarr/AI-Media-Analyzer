@@ -7,6 +7,7 @@ import { validateText } from "./middleware.js";
 import { config } from "./config.js";
 import { Analysis } from "./db.js";
 import { crawlArticle } from "./crawler.js";
+import { crawlPTTBoard, crawlPTTArticle } from "./crawlers/ptt.js";  // 新增 import
 
 const router = express.Router();
 
@@ -108,6 +109,28 @@ router.post("/crawl", async (req, res) => {
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: "Crawl failed" });
+  }
+});
+
+/* ---------- PTT Crawl + Analyze ---------- */
+router.post("/crawl/ptt", async (req, res) => {
+  const { board = "Gossiping", limit = 3 } = req.body;
+
+  try {
+    const articles = await crawlPTTBoard(board, limit);
+
+    let combinedText = "";
+
+    for (const a of articles) {
+      const article = await crawlPTTArticle(a.url);
+      combinedText += `標題：${a.title}\n${article.content}\n${article.pushes}\n\n`;
+    }
+
+    req.body.text = combinedText;
+    return router.handle(req, res); // 重用分析流程
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: "PTT crawl failed" });
   }
 });
 
