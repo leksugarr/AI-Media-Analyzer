@@ -12,7 +12,7 @@ export async function crawlPTTBoard(board = "Gossiping", limit = 3) {
   const res = await fetch(`${BASE_URL}/bbs/${board}/index.html`, {
     headers: {
       "User-Agent": "Mozilla/5.0",
-      Cookie: "over18=1", // 關鍵
+      Cookie: "over18=1", // 18 歲認證
     },
   });
 
@@ -42,6 +42,7 @@ export async function crawlPTTBoard(board = "Gossiping", limit = 3) {
 
 /**
  * 爬單篇 PTT 文章
+ * @param {string} url 文章完整網址
  */
 export async function crawlPTTArticle(url) {
   const res = await fetch(url, {
@@ -56,24 +57,25 @@ export async function crawlPTTArticle(url) {
   const html = await res.text();
   const $ = cheerio.load(html);
 
-  // 移除多餘資訊
+  // 先抓推文，避免被移除後抓不到
+  const pushes = [];
+  $(".push").each((_, el) => {
+    const tag = $(el).find(".push-tag").text().trim();
+    const user = $(el).find(".push-userid").text().trim();
+    const text = $(el).find(".push-content").text().replace(/^:\s*/, "").trim();
+    pushes.push(`${tag} ${user}: ${text}`);
+  });
+
+  // 移除不需要的元素
   $(".push").remove();
   $(".article-metaline").remove();
   $(".article-metaline-right").remove();
 
-  const content = $("#main-content").text();
-  const pushes = [];
-
-  $(".push").each((_, el) => {
-    const tag = $(el).find(".push-tag").text().trim();
-    const user = $(el).find(".push-userid").text().trim();
-    const text = $(el).find(".push-content").text().trim();
-
-    pushes.push(`${tag} ${user}: ${text}`);
-  });
+  // 取得主要文章內容
+  const content = $("#main-content").text().replace(/\s+/g, " ").trim();
 
   return {
-    content: content.replace(/\s+/g, " ").trim(),
+    content,
     pushes: pushes.join(" "),
   };
 }
