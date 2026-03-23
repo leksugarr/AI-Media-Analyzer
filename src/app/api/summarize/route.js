@@ -71,20 +71,25 @@ export async function POST(request) {
   }
 
   // --- Try Express backend first ---
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-      signal: AbortSignal.timeout(30000),
-    });
-    if (res.ok) {
-      return Response.json(await res.json(), { status: 200 });
-    }
-  } catch {
-    // Backend unreachable, fall through
+ // --- Try Express backend first ---
+try {
+  const authHeader = request.headers.get("authorization");
+  console.log("📤 Auth header dikirim ke backend:", authHeader);
+  const res = await fetch(`${BACKEND_URL}/api/analyze`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(authHeader ? { Authorization: authHeader } : {}),
+    },
+    body: JSON.stringify({ text }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (res.ok) {
+    return Response.json(await res.json(), { status: 200 });
   }
-
+} catch {
+  // Backend unreachable, fall through
+}
   // --- Hugging Face ---
   if (!HF_API_KEY) {
     return Response.json(

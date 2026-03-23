@@ -35,7 +35,7 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        login(data.user); // save to AuthContext + localStorage
+        login(data.user, data.token); // save to AuthContext + localStorage
         setMessage({ text: "Login successful! Redirecting...", type: "success" });
         setTimeout(() => router.push("/"), 800);
       } else {

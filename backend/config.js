@@ -6,7 +6,7 @@ export const config = {
 
   // Database
   MONGODB_URI:
-    process.env.MONGODB_URI || "mongodb://localhost:27017/sentiment_analyzer",
+    process.env.MONGODB_URI,
 
   // API Keys
   HF_API_KEY: process.env.HF_API_KEY,

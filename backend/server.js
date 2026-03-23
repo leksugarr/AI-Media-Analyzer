@@ -65,15 +65,14 @@ app.use((err, req, res, next) => {
 const startServer = async () => {
   try {
     await connectDB();
-    console.log("Database connected");
+    console.log("✅ Database connected");
   } catch (err) {
-    console.error("DB connection failed:", err.message);
+    console.error("❌ DB connection failed:", err.message);
+    process.exit(1); // ← tambah ini, biar ketahuan kalau DB gagal
   }
 
   app.listen(config.PORT, () => {
     console.log(`Backend running on http://localhost:${config.PORT}`);
-    console.log(`Environment: ${config.NODE_ENV}`);
   });
 };
-
 startServer();

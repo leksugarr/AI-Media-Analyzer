@@ -9,18 +9,33 @@ import { validateText } from "./middleware.js";
 import { config } from "./config.js";
 import { Analysis, User } from "./db.js";        // ← add User model
 import { crawlArticle } from "./crawler.js";
-import { crawlPTTBoard, crawlPTTArticle } from "./crawlers/ptt.js";
+import { crawlPTTBoard, crawlPTTArticle } from "./backend/crawlers/ptt.js";
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_in_production";
 
+//tambah
+function getUserFromToken(req) {
+  try {
+    const auth = req.headers.authorization;
+    console.log("🔑 Auth header:", auth); // ← tambah ini
+    if (!auth?.startsWith("Bearer ")) return null;
+    const token = auth.split(" ")[1];
+    return jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    console.log("🔑 Token error:", err.message); // ← tambah ini
+    return null;
+  }
+}
 /* ---------- AI init ---------- */
 let hf = null;
 if (config.HF_API_KEY?.startsWith("hf_")) {
   hf = new HfInference(config.HF_API_KEY);
 }
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
 
 /* ---------- Utils ---------- */
 function simpleSummarize(text) {
@@ -139,8 +154,17 @@ router.post("/analyze", validateText, async (req, res) => {
     });
 
     try {
-      await Analysis.create({ originalText: text, summary, sentiment });
-    } catch {}
+      const userInfo = getUserFromToken(req);
+await Analysis.create({
+  originalText: text,
+  summary,
+  sentiment,
+  userId: userInfo?.userId || "anonymous",
+});
+console.log("✅ Saved to MongoDB, userId:", userInfo?.userId || "anonymous");
+    } catch (err) {
+  console.error("❌ MongoDB save error:", err.message); // ← lihat error aslinya
+}
 
     res.json({ summary, sentiment, keywords });
   } catch {
@@ -182,5 +206,28 @@ router.post("/crawl/ptt", async (req, res) => {
     res.status(500).json({ error: "PTT crawl failed" });
   }
 });
+
+// Tambahkan di backend/routes.js
+// GET /api/history — fetch 20 latest analyses dari MongoDB
+
+router.get("/history", async (req, res) => {
+  try {
+    const userInfo = getUserFromToken(req);
+    if (!userInfo) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+ 
+    const analyses = await Analysis.find({ userId: userInfo.userId })
+      .sort({ timestamp: -1 })
+      .limit(20)
+      .select("originalText summary sentiment timestamp");
+ 
+    res.json({ analyses });
+  } catch (err) {
+    console.error("History fetch error:", err.message);
+    res.status(500).json({ error: "Failed to fetch history" });
+  }
+});
+ 
 
 export default router;

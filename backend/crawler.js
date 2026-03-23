@@ -1,5 +1,5 @@
 import fetch from "node-fetch";
-import cheerio from "cheerio";
+import  * as cheerio from "cheerio";
 
 /**
  * 通用文章 / 新聞爬蟲
