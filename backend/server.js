@@ -1,14 +1,16 @@
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import { connectDB } from "./db.js";
 import { config, validateConfig } from "./config.js";
 import routes from "./routes.js";
 
-dotenv.config();
 
 const app = express();
 
+//tambah
+console.log("HF_API_KEY:", config.HF_API_KEY);
 /* ---------- Validate config ---------- */
 try {
   validateConfig();

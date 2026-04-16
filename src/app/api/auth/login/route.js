@@ -14,7 +14,7 @@ export async function POST(request) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(10000),
     });
 
     const data = await res.json();
@@ -50,7 +50,7 @@ export async function POST(request) {
   }
 
   return Response.json(
-    { success: true, message: "Login successful (mock)", user: { email } },
+    { success: true, message: "Login successful (mock)", user: { email }, token:null },
     { status: 200 }
   );
 }

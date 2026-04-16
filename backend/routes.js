@@ -1,6 +1,6 @@
 import express from "express";
-import { HfInference } from "@huggingface/inference";
-import OpenAI from "openai";
+import Groq from "groq-sdk";
+import {tavily} from "@tavily/core";
 import keywordExtractor from "keyword-extractor";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -14,7 +14,7 @@ import { crawlPTTBoard, crawlPTTArticle } from "./backend/crawlers/ptt.js";
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_in_production";
 
-//tambah
+/*------auth helper------*/
 function getUserFromToken(req) {
   try {
     const auth = req.headers.authorization;
@@ -28,15 +28,8 @@ function getUserFromToken(req) {
   }
 }
 /* ---------- AI init ---------- */
-let hf = null;
-if (config.HF_API_KEY?.startsWith("hf_")) {
-  hf = new HfInference(config.HF_API_KEY);
-}
-
-const openai = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
-
+const groq=new Groq({ apiKey: process.env.GROQ_API_KEY });
+const tavilyClient=tavily({ apiKey: process.env.TAVILY_API_KEY });
 /* ---------- Utils ---------- */
 function simpleSummarize(text) {
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
@@ -114,67 +107,139 @@ router.post("/auth/login", async (req, res) => {
 });
 
 /* ================================================
-   ANALYZE
+   ANALYZE - summarize + sentiment via Groq
    ================================================ */
 router.post("/analyze", validateText, async (req, res) => {
   const { text } = req.body;
 
-  try {
-    let translated = text;
-    try {
-      const t = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: `Translate to English:\n${text}` }],
-      });
-      translated = t.choices[0].message.content;
-    } catch {}
-
-    let summary, sentiment;
-
-    if (hf) {
-      try {
-        const [s1, s2] = await Promise.all([
-          hf.summarization({ model: config.MODELS.SUMMARIZATION, inputs: translated }),
-          hf.textClassification({ model: config.MODELS.SENTIMENT, inputs: translated }),
-        ]);
-        summary = s1[0].summary_text;
-        sentiment = s2[0];
-      } catch {
-        summary = simpleSummarize(translated);
-        sentiment = analyzeSentiment(translated);
-      }
-    } else {
-      summary = simpleSummarize(translated);
-      sentiment = analyzeSentiment(translated);
-    }
-
-    const keywords = keywordExtractor.extract(translated, {
-      language: "english",
-      remove_duplicates: true,
+   try {
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      messages: [
+        {
+          role: "system",
+          content: `You are an article analyzer. Given an article in any language, respond ONLY with a valid JSON object, no markdown:
+{
+  "summary": "2-3 sentence summary in the same language as the article",
+  "sentiment": {
+    "label": "POSITIVE or NEGATIVE or NEUTRAL",
+    "score": 0.0
+  },
+  "keywords": ["keyword1", "keyword2", "keyword3"]
+}`
+        },
+        {
+          role: "user",
+          content: text
+        }
+      ],
     });
 
-    try {
-      const userInfo = getUserFromToken(req);
-await Analysis.create({
-  originalText: text,
-  summary,
-  sentiment,
-  userId: userInfo?.userId || "anonymous",
-});
-console.log("✅ Saved to MongoDB, userId:", userInfo?.userId || "anonymous");
-    } catch (err) {
-  console.error("❌ MongoDB save error:", err.message); // ← lihat error aslinya
-}
+    const raw = completion.choices[0].message.content.replace(/```json|```/g, "").trim();
+    const data = JSON.parse(raw);
 
-    res.json({ summary, sentiment, keywords });
-  } catch {
+    const userInfo = getUserFromToken(req);
+    await Analysis.create({
+      originalText: text,
+      summary: data.summary,
+      sentiment: data.sentiment,
+      userId: userInfo?.userId || "anonymous",
+    }).catch(err => console.error("MongoDB save error:", err.message));
+
+    res.json({
+      summary: data.summary,
+      sentiment: data.sentiment,
+      keywords: data.keywords,
+    });
+  } catch (err) {
+    console.error("Analyze error:", err.message);
     res.status(500).json({ error: "Analysis failed" });
   }
 });
-
 /* ================================================
-   CRAWL
-   ================================================ */
+TOPIC CHATBOT - GROQ +TAVILY real time search
+/* ================================================*/
+router.post("/topic-analyze",async (req, res)=>{
+const{messages}=req.body;
+if(!messages||!messages.length)
+return res.status(400).json({error:"Messages required"});
+ try {
+    // ambil pesan terakhir user untuk search
+    const lastUserMsg = messages.filter(m => m.role === "user").at(-1)?.content;
+
+    // search real-time info via Tavily
+    let searchContext = "";
+    try {
+      const searchResult = await tavilyClient.search(lastUserMsg, {
+        maxResults: 3,
+        searchDepth: "basic",
+      });
+      searchContext = searchResult.results
+        .map(r => `${r.title}: ${r.content}`)
+        .join("\n\n");
+    } catch (err) {
+      console.error("Tavily search error:", err.message);
+    }
+
+    const systemPrompt = {
+      role: "system",
+      content: `You are a real-world topic analyzer chatbot. You have access to current web information.
+
+${searchContext ? `Current information from the web:\n${searchContext}\n\n` : ""}
+
+When the user asks about a topic, respond ONLY with a valid JSON object, no markdown:
+{
+  "reply": "friendly conversational response based on real current information",
+  "category": "Environment / Economy / Technology / Health / Politics / Society / Science",
+  "subtopics": ["subtopic1", "subtopic2", "subtopic3"],
+  "trend_labels": ["2019", "2020", "2021", "2022", "2023", "2024"],
+  "trend_positive": [40, 45, 50, 55, 60, 65],
+  "trend_negative": [45, 40, 38, 32, 28, 25]
+}
+
+If the user is just chatting (greetings, follow-up questions), respond ONLY with:
+{ "reply": "your conversational response" }
+
+Always respond in the same language the user uses. Always valid JSON, no markdown fences.`
+    };
+
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      messages: [systemPrompt, ...messages],
+    });
+
+    const raw = completion.choices[0].message.content.replace(/```json|```/g, "").trim();
+    const data = JSON.parse(raw);
+
+    // simpan ke MongoDB kalau ada kategori (bukan sekadar chat)
+    if (data.category) {
+      const userInfo = getUserFromToken(req);
+      await Analysis.create({
+        originalText: lastUserMsg,
+        summary: `Topic: ${data.category} — ${data.reply}`,
+        sentiment: { label: "NEUTRAL", score: 0.5 },
+        userId: userInfo?.userId || "anonymous",
+      }).catch(err => console.error("MongoDB save error:", err.message));
+    }
+
+    res.json(data);
+  } catch (err) {
+    console.error("Topic analyze error:", err.message);
+    res.status(500).json({ error: "Topic analysis failed" });
+  }
+
+
+
+}
+);
+
+
+
+
+
+
+
+   /*===CRAWL===========================================*/
 router.post("/crawl", async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: "URL required" });
@@ -207,6 +272,7 @@ router.post("/crawl/ptt", async (req, res) => {
   }
 });
 
+//HISTORY
 // Tambahkan di backend/routes.js
 // GET /api/history — fetch 20 latest analyses dari MongoDB
 

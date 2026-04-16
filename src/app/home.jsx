@@ -6,6 +6,8 @@ import SummaryBox from "@/components/SummaryBox";
 import Button from "@/components/Button";
 import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
+import TopicChatbot from "@/components/TopicChatbox";
+
 
 export default function HomePage() {
   const [input, setInput] = useState("");
@@ -279,6 +281,19 @@ const fetchHistory = async () => {
           </AnimatePresence>
         </div>
       </section>
+      {/* new*/}
+<section className="pb-20 px-6">
+  <div className="max-w-3xl mx-auto space-y-4">
+    <div className="text-center space-y-1 mb-6">
+      <h2 className="text-2xl font-bold">Topic Analyzer</h2>
+      <p className="text-gray-400 text-sm">
+        Ask about any real-world topic for live analysis, classification, and trend data
+      </p>
+    </div>
+    <TopicChatbot />
+  </div>
+</section>
+
     </div>
   );
 }
