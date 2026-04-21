@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 // Configuration file
 export const config = {
   // Server
@@ -5,23 +8,16 @@ export const config = {
   NODE_ENV: process.env.NODE_ENV || "development",
 
   // Database
-  MONGODB_URI:
-    process.env.MONGODB_URI || "mongodb://localhost:27017/sentiment_analyzer",
+  MONGODB_URI: process.env.MONGODB_URI,
 
   // API Keys
-  HF_API_KEY: process.env.HF_API_KEY,
+  GROQ_API_KEY: process.env.GROQ_API_KEY,
+    TAVILY_API_KEY: process.env.TAVILY_API_KEY,
 
-  // Models
-  MODELS: {
-    SUMMARIZATION: "facebook/bart-large-cnn",
-    SENTIMENT: "nlptown/bert-base-multilingual-uncased-sentiment",
-  },
 
   // Limits
   MAX_TEXT_LENGTH: 5000,
   MIN_TEXT_LENGTH: 50,
-  SUMMARY_MIN_LENGTH: 50,
-  SUMMARY_MAX_LENGTH: 150,
 
   // CORS
   CORS_ORIGIN: process.env.CORS_ORIGIN || "*",
@@ -29,8 +25,10 @@ export const config = {
 
 // Validate required environment variables
 export const validateConfig = () => {
-  // HF_API_KEY is optional - app will use fallback algorithms if not provided
-  if (!process.env.HF_API_KEY) {
-    console.warn("⚠️  HF_API_KEY not set - using fallback algorithms");
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error("⚠️  GROQ_API_KEY is required");
+  }
+  if (!process.env.TAVILY_API_KEY) {
+    console.warn("⚠️  TAVILY_API_KEY not set - real time search disabled");
   }
 };

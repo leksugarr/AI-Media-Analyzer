@@ -3,9 +3,19 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+    setOpen(false);
+  };
 
   return (
     <>
@@ -20,8 +30,7 @@ export default function Navbar() {
           {/* Logo */}
           <Link
             href="/"
-            className="text-xl font-semibold bg-gradient-to-r 
-            from-blue-400 to-blue-200 bg-clip-text text-transparent hover:text-white"
+            className="text-xl font-semibold bg-gradient-to-r from-blue-400 to-blue-200 bg-clip-text text-transparent hover:text-white"
           >
             AI Analyzer
           </Link>
@@ -31,9 +40,21 @@ export default function Navbar() {
             <Link href="/" className="hover:text-blue-400">
               Home
             </Link>
-            <Link href="/login" className="hover:text-blue-400">
-              Login
-            </Link>
+            {user ? (
+              <>
+                <span className="text-xs text-gray-400">{user.email}</span>
+                <button
+                  onClick={handleLogout}
+                  className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-red-500/20 hover:text-red-400 text-sm transition"
+                >
+                  Logout
+                </button>
+              </>
+            ) : (
+              <Link href="/login" className="hover:text-blue-400">
+                Login
+              </Link>
+            )}
           </div>
 
           {/* Hamburger Button */}
@@ -43,21 +64,9 @@ export default function Navbar() {
             whileTap={{ scale: 0.9 }}
           >
             <div className="space-y-1.5">
-              <span
-                className={`block h-0.5 w-6 bg-white transition-all ${
-                  open ? "rotate-45 translate-y-2" : ""
-                }`}
-              ></span>
-              <span
-                className={`block h-0.5 w-6 bg-white transition-all ${
-                  open ? "opacity-0" : ""
-                }`}
-              ></span>
-              <span
-                className={`block h-0.5 w-6 bg-white transition-all ${
-                  open ? "-rotate-45 -translate-y-2" : ""
-                }`}
-              ></span>
+              <span className={`block h-0.5 w-6 bg-white transition-all ${open ? "rotate-45 translate-y-2" : ""}`}></span>
+              <span className={`block h-0.5 w-6 bg-white transition-all ${open ? "opacity-0" : ""}`}></span>
+              <span className={`block h-0.5 w-6 bg-white transition-all ${open ? "-rotate-45 -translate-y-2" : ""}`}></span>
             </div>
           </motion.button>
         </div>
@@ -71,25 +80,23 @@ export default function Navbar() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 50 }}
             transition={{ duration: 0.25 }}
-            className="fixed top-16 right-0 w-[75%] h-screen 
-                       bg-neutral-900/60 backdrop-blur-2xl 
-                       border-l border-white/10 p-6 flex flex-col 
-                       gap-6 z-40"
+            className="fixed top-16 right-0 w-[75%] h-screen bg-neutral-900/60 backdrop-blur-2xl border-l border-white/10 p-6 flex flex-col gap-6 z-40"
           >
-            <Link
-              href="/"
-              className="text-lg hover:text-blue-400"
-              onClick={() => setOpen(false)}
-            >
+            <Link href="/" className="text-lg hover:text-blue-400" onClick={() => setOpen(false)}>
               Home
             </Link>
-            <Link
-              href="/login"
-              className="text-lg hover:text-blue-400"
-              onClick={() => setOpen(false)}
-            >
-              Login
-            </Link>
+            {user ? (
+              <>
+                <span className="text-sm text-gray-400">{user.email}</span>
+                <button onClick={handleLogout} className="text-lg text-red-400 hover:text-red-300 text-left">
+                  Logout
+                </button>
+              </>
+            ) : (
+              <Link href="/login" className="text-lg hover:text-blue-400" onClick={() => setOpen(false)}>
+                Login
+              </Link>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

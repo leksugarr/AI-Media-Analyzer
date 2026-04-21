@@ -1,11 +1,14 @@
+// ADD THIS to your existing db.js — paste alongside your Analysis model
+
+
 import mongoose from "mongoose";
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/sentiment_analyzer";
 
 export const connectDB = async () => {
   try {
+    const MONGODB_URI = process.env.MONGODB_URI; 
     await mongoose.connect(MONGODB_URI);
-    console.log("MongoDB connected successfully");
+    console.log("MongoDB connected successfully yes sir");
   } catch (error) {
     console.warn("MongoDB connection warning (optional):", error.message);
     // Don't exit - API can still work without DB
@@ -40,3 +43,16 @@ const analysisSchema = new mongoose.Schema({
 });
 
 export const Analysis = mongoose.model("Analysis", analysisSchema);
+
+const userSchema = new mongoose.Schema(
+  {
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    password: { type: String, required: true }, // bcrypt hashed
+  },
+  { timestamps: true }
+);
+
+export const User = mongoose.model("User", userSchema);
+
+// Also install these if not already present:
+// npm install bcryptjs jsonwebtoken

@@ -1,76 +1,131 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ArticleCard from "@/components/ArticleCard";
 import Button from "@/components/Button";
+import { useAuth } from "@/context/AuthContext";
 import { motion } from "framer-motion";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [message, setMessage] = useState({ text: "", type: "" });
+  const [loading, setLoading] = useState(false);
 
-  const signup = async () => {
-    const res = await fetch("/api/auth/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+  const { login } = useAuth();
+  const router = useRouter();
 
-    const data = await res.json();
-    setMessage(data.message);
+  const handleSignup = async () => {
+    if (!email || !password || !confirm) {
+      setMessage({ text: "Please fill in all fields", type: "error" });
+      return;
+    }
+
+    if (password !== confirm) {
+      setMessage({ text: "Passwords do not match", type: "error" });
+      return;
+    }
+
+    if (password.length < 6) {
+      setMessage({ text: "Password must be at least 6 characters", type: "error" });
+      return;
+    }
+
+    setLoading(true);
+    setMessage({ text: "", type: "" });
+
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        login(data.user); // auto-login after signup
+        setMessage({ text: "Account created! Redirecting...", type: "success" });
+        setTimeout(() => router.push("/"), 800);
+      } else {
+        setMessage({ text: data.message || "Signup failed", type: "error" });
+      }
+    } catch {
+      setMessage({ text: "Network error. Please try again.", type: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") handleSignup();
   };
 
   return (
-    <div>
-      <div className="min-h-screen flex justify-center items-center px-6">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.85 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.35 }}
-        >
-          <ArticleCard className="max-w-md w-full p-6 space-y-6">
-            <h1 className="text-2xl font-bold text-center mb-2">
-              Create Account
-            </h1>
+    <div className="min-h-screen flex justify-center items-center px-6">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3 }}
+        className="max-w-md w-full"
+      >
+        <ArticleCard className="p-6 space-y-5">
+          <h1 className="text-2xl font-bold text-center mb-2">Create Account</h1>
 
-            <input
-              type="email"
-              placeholder="Email"
-              className="w-full p-3 bg-black/20 rounded-xl outline-none"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+          <input
+            type="email"
+            placeholder="Email"
+            className="w-full p-3 bg-black/20 rounded-xl outline-none border border-white/10 focus:border-white/30 transition"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
 
-            <input
-              type="password"
-              placeholder="Password"
-              className="w-full p-3 bg-black/20 rounded-xl outline-none"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+          <input
+            type="password"
+            placeholder="Password (min 6 characters)"
+            className="w-full p-3 bg-black/20 rounded-xl outline-none border border-white/10 focus:border-white/30 transition"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
 
-            <Button
-              onClick={signup}
-              className="relative w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 transition group overflow-hidden"
-            >
-              <span className="absolute inset-0 bg-gradient-to-r from-pink-500 to-purple-500 blur-lg opacity-0 group-hover:opacity-40 transition"></span>
-              <span className="relative z-10 font-semibold">Sign Up</span>
-            </Button>
+          <input
+            type="password"
+            placeholder="Confirm Password"
+            className="w-full p-3 bg-black/20 rounded-xl outline-none border border-white/10 focus:border-white/30 transition"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
 
-            {message && (
-              <p className="text-center text-sm text-green-400">{message}</p>
-            )}
+          <Button
+            onClick={handleSignup}
+            disabled={loading}
+            className="relative w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 transition group overflow-hidden"
+          >
+            <span className="absolute inset-0 bg-gradient-to-r from-pink-500 to-purple-500 blur-lg opacity-0 group-hover:opacity-40 transition" />
+            <span className="relative z-10 font-semibold">
+              {loading ? "Creating account..." : "Sign Up"}
+            </span>
+          </Button>
 
-            <p className="text-center text-gray-400 text-sm">
-              Already have an account?{" "}
-              <Link href="/login" className="text-blue-400 hover:underline">
-                Login
-              </Link>
+          {message.text && (
+            <p className={`text-center text-sm ${message.type === "error" ? "text-red-400" : "text-green-400"}`}>
+              {message.text}
             </p>
-          </ArticleCard>
-        </motion.div>
-      </div>
+          )}
+
+          <p className="text-center text-gray-400 text-sm">
+            Already have an account?{" "}
+            <Link href="/login" className="text-blue-400 hover:underline">
+              Login
+            </Link>
+          </p>
+        </ArticleCard>
+      </motion.div>
     </div>
   );
 }

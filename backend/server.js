@@ -1,14 +1,16 @@
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import { connectDB } from "./db.js";
 import { config, validateConfig } from "./config.js";
 import routes from "./routes.js";
 
-dotenv.config();
 
 const app = express();
 
+//tambah
+console.log("HF_API_KEY:", config.HF_API_KEY);
 /* ---------- Validate config ---------- */
 try {
   validateConfig();
@@ -65,15 +67,14 @@ app.use((err, req, res, next) => {
 const startServer = async () => {
   try {
     await connectDB();
-    console.log("Database connected");
+    console.log("✅ Database connected");
   } catch (err) {
-    console.error("DB connection failed:", err.message);
+    console.error("❌ DB connection failed:", err.message);
+    process.exit(1); // ← tambah ini, biar ketahuan kalau DB gagal
   }
 
   app.listen(config.PORT, () => {
     console.log(`Backend running on http://localhost:${config.PORT}`);
-    console.log(`Environment: ${config.NODE_ENV}`);
   });
 };
-
 startServer();
