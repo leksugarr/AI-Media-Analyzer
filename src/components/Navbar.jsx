@@ -40,6 +40,10 @@ export default function Navbar() {
             <Link href="/" className="hover:text-blue-400">
               Home
             </Link>
+
+              <Link href="/dashboard" className="hover:text-blue-400">
+                Dashboard
+              </Link>
             {user ? (
               <>
                 <span className="text-xs text-gray-400">{user.email}</span>

@@ -1,22 +1,19 @@
-// ADD THIS to your existing db.js — paste alongside your Analysis model
-
-
 import mongoose from "mongoose";
-
 
 export const connectDB = async () => {
   const MONGODB_URI = process.env.MONGODB_URI;
-  
+
   if (!MONGODB_URI) {
     throw new Error("MONGODB_URI tidak ada di .env!");
   }
 
-  await mongoose.connect(MONGODB_URI); // biarkan error muncul ke atas
+  await mongoose.connect(MONGODB_URI);
   console.log("✅ MongoDB connected successfully");
 };
+
 export default mongoose;
 
-// Analysis Schema for storing results
+// ─── Analysis Schema ───────────────────────────────────────────────────────────
 const analysisSchema = new mongoose.Schema({
   originalText: {
     type: String,
@@ -43,30 +40,68 @@ const analysisSchema = new mongoose.Schema({
 
 export const Analysis = mongoose.model("Analysis", analysisSchema);
 
+// ─── User Schema ───────────────────────────────────────────────────────────────
 const userSchema = new mongoose.Schema(
   {
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    password: { type: String, required: true }, // bcrypt hashed
+    email:    { type: String, required: true, unique: true, lowercase: true, trim: true },
+    password: { type: String, required: true },
   },
   { timestamps: true }
 );
 
 export const User = mongoose.model("User", userSchema);
 
-//conversation schema -- BARU
-const messageSchema=new mongoose.Schema({
-  role:{type:String, enum:["user","assistant"], required:true},
-  content:{type:mongoose.Schema.Types.Mixed, required:true}, 
-})
-
-const conversationSchema=new mongoose.Schema({
-  userId:{type:String, required:true},
-  title:{type:String, required:true},//ambil pesan dari pesan pertama user
-  messages:[messageSchema],
-  createdAt:{type:Date, default:Date.now},
-  updatedAt:{type:Date, default:Date.now},
+// ─── Conversation Schema ───────────────────────────────────────────────────────
+const messageSchema = new mongoose.Schema({
+  role:    { type: String, enum: ["user", "assistant"], required: true },
+  content: { type: mongoose.Schema.Types.Mixed, required: true },
 });
 
-export const Conversation=mongoose.model("Conversation", conversationSchema);
-// Also install these if not already present:
-// npm install bcryptjs jsonwebtoken
+const conversationSchema = new mongoose.Schema({
+  userId:    { type: String, required: true },
+  title:     { type: String, required: true },
+  messages:  [messageSchema],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+
+export const Conversation = mongoose.model("Conversation", conversationSchema);
+
+// ─── Article Schema (Google News / PTT / Dcard) ────────────────────────────────
+// Stores raw crawled articles before analysis is run on them.
+// The `analyzed` flag lets the scheduler pick up unprocessed articles.
+const articleSchema = new mongoose.Schema(
+  {
+    title:       { type: String, required: true, trim: true },
+    url:         { type: String, required: true },
+    source:      { type: String, default: "" },
+    description: { type: String, default: "" },
+    content:     { type: String, default: "" },
+
+    crawler: {
+      type: String,
+      enum: ["googleNews", "ptt", "dcard", "youtube", "manual"],
+      required: true,
+    },
+    keywords:    { type: [String], default: [] },
+    topic:       { type: String, default: "" },
+    locale:      { type: String, default: "zh-TW" },
+
+    publishedAt: { type: Date, default: Date.now },
+    fetchedAt:   { type: Date, default: Date.now },
+
+    analyzed: { type: Boolean, default: false },
+    sentiment: {
+      label: { type: String, default: "" },
+      score: { type: Number, default: null },
+    },
+    summary: { type: String, default: "" },
+  },
+  { timestamps: true }
+);
+
+articleSchema.index({ url: 1 }, { unique: true });
+articleSchema.index({ analyzed: 1, fetchedAt: -1 });
+articleSchema.index({ keywords: 1, fetchedAt: -1 });
+
+export const Article = mongoose.model("Article", articleSchema);

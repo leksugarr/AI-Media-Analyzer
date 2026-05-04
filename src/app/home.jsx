@@ -116,7 +116,7 @@ export default function HomePage() {
   };
 
  const handleSend = async (overrideText) => {
-  const text = overrideText || input;  // ← pakai override kalau ada
+  const text = typeof overrideText === "string" ? overrideText : input;
   if (!text.trim() || loading) return;
   setError("");
 
@@ -318,7 +318,7 @@ const handleKeyDown = (e) => {
                   {showHistory ? "Hide" : "History"}
                 </button>
                 <button
-                  onClick={handleSend}
+                  onClick={() => handleSend()}
                   disabled={loading || !input.trim()}
                   className="px-4 py-1.5 bg-blue-600/40 hover:bg-blue-600/60 border border-blue-500/30 rounded-lg text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -332,5 +332,3 @@ const handleKeyDown = (e) => {
     </div>
   );
 }
-
-  
