@@ -5,16 +5,15 @@ import mongoose from "mongoose";
 
 
 export const connectDB = async () => {
-  try {
-    const MONGODB_URI = process.env.MONGODB_URI; 
-    await mongoose.connect(MONGODB_URI);
-    console.log("MongoDB connected successfully yes sir");
-  } catch (error) {
-    console.warn("MongoDB connection warning (optional):", error.message);
-    // Don't exit - API can still work without DB
+  const MONGODB_URI = process.env.MONGODB_URI;
+  
+  if (!MONGODB_URI) {
+    throw new Error("MONGODB_URI tidak ada di .env!");
   }
-};
 
+  await mongoose.connect(MONGODB_URI); // biarkan error muncul ke atas
+  console.log("✅ MongoDB connected successfully");
+};
 export default mongoose;
 
 // Analysis Schema for storing results
@@ -54,5 +53,20 @@ const userSchema = new mongoose.Schema(
 
 export const User = mongoose.model("User", userSchema);
 
+//conversation schema -- BARU
+const messageSchema=new mongoose.Schema({
+  role:{type:String, enum:["user","assistant"], required:true},
+  content:{type:mongoose.Schema.Types.Mixed, required:true}, 
+})
+
+const conversationSchema=new mongoose.Schema({
+  userId:{type:String, required:true},
+  title:{type:String, required:true},//ambil pesan dari pesan pertama user
+  messages:[messageSchema],
+  createdAt:{type:Date, default:Date.now},
+  updatedAt:{type:Date, default:Date.now},
+});
+
+export const Conversation=mongoose.model("Conversation", conversationSchema);
 // Also install these if not already present:
 // npm install bcryptjs jsonwebtoken

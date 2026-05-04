@@ -32,7 +32,7 @@ export default function Navbar() {
             href="/"
             className="text-xl font-semibold bg-gradient-to-r from-blue-400 to-blue-200 bg-clip-text text-transparent hover:text-white"
           >
-            AI Analyzer
+            AI Media Analyzer
           </Link>
 
           {/* Desktop Menu */}

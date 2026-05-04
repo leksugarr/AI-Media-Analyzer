@@ -1,25 +1,78 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ArticleCard from "@/components/ArticleCard";
-import SummaryBox from "@/components/SummaryBox";
-import Button from "@/components/Button";
 import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
-import TopicChatbot from "@/components/TopicChatbox";
+
+function Heatmap({ data }) {
+ // guard — kalau data tidak lengkap, jangan render
+  if (!data?.years || !data?.months || !data?.data) return null;
+  const { years, months, data: grid } = data;
+  if (!Array.isArray(grid) || grid.length === 0) return null;
+
+  const max = Math.max(...grid.flat()) || 1; // hindari division by zero
+
+  const getColor = (val) => {
+    const intensity = val / max;
+    if (intensity < 0.2) return "rgba(99,102,241,0.1)";
+    if (intensity < 0.4) return "rgba(99,102,241,0.25)";
+    if (intensity < 0.6) return "rgba(99,102,241,0.45)";
+    if (intensity < 0.8) return "rgba(99,102,241,0.65)";
+    return "rgba(99,102,241,0.9)";
+  };
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <div className="min-w-[500px]">
+        {/* Month labels */}
+        <div className="flex ml-10 mb-1">
+          {months.map(m => (
+            <div key={m} className="flex-1 text-center text-[9px] text-gray-600">{m}</div>
+          ))}
+        </div>
+        {/* Rows per year */}
+        {years.map((year, yi) => (
+          <div key={year} className="flex items-center gap-1 mb-1">
+            <div className="w-9 text-[10px] text-gray-500 text-right pr-1">{year}</div>
+            {Array.isArray(grid[yi]) && grid[yi].map((val, mi) => (
+              <div
+                key={mi}
+                className="flex-1 h-5 rounded-sm cursor-default transition-all hover:scale-110"
+                style={{ background: getColor(val) }}
+                title={`${months[mi]} ${year}: ${val}`}
+              />
+            ))}
+          </div>
+        ))}
+        {/* Legend */}
+        <div className="flex items-center gap-2 mt-2 ml-10">
+          <span className="text-[9px] text-gray-600">Low</span>
+          {[0.1, 0.25, 0.45, 0.65, 0.9].map((op, i) => (
+            <div key={i} className="w-4 h-3 rounded-sm" style={{ background: `rgba(99,102,241,${op})` }} />
+          ))}
+          <span className="text-[9px] text-gray-600">High</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 
 export default function HomePage() {
   const [input, setInput] = useState("");
-  const [result, setResult] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showHistory, setShowHistory] = useState(false);
-  const [history, setHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const [conversationId, setConversationId] = useState(null);
+
 
   const { user, token, loading: authLoading } = useAuth();
   const router = useRouter();
+  const bottomRef=useRef(null);
 
   // Redirect to login if not logged in
   useEffect(() => {
@@ -27,273 +80,257 @@ export default function HomePage() {
       router.push("/login");
     }
   }, [user, authLoading, router]);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-const fetchHistory = async () => {
-  setHistoryLoading(true);
-  try {
-    const res = await fetch("/api/history", {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    const data = await res.json();
-    setHistory(data.analyses || []);
-  } catch {
-    setHistory([]);
-  } finally {
-    setHistoryLoading(false);
-  }
-};
+  useEffect(() => {
+    if (token) fetchConversations();
+  }, [token]);
 
-  const toggleHistory = () => {
-    if (!showHistory) fetchHistory();
-    setShowHistory((prev) => !prev);
+  const fetchConversations = async () => {
+    try {
+      const res = await fetch("/api/chat", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setConversations(data.conversations || []);
+    } catch {}
   };
 
-  const summarize = async () => {
-    if (!input.trim()) {
-      setError("Please paste an article first");
-      return;
-    }
-    if (input.trim().length < 50) {
-      setError("Article is too short — please paste more text");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    setResult(null);
-
+  const loadConversation = async (id) => {
     try {
-     const res = await fetch("/api/summarize", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  },
-  body: JSON.stringify({ text: input }),
-});
-
+      const res = await fetch(`/api/chat?id=${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const data = await res.json();
+      setMessages(data.conversation.messages || []);
+      setConversationId(id);
+      setShowHistory(false);
+    } catch {}
+  };
 
-      if (!res.ok) {
-        setError(data.error || "Failed to analyze article");
-        return;
+  const startNewChat = () => {
+    setMessages([]);
+    setConversationId(null);
+  };
+
+ const handleSend = async (overrideText) => {
+  const text = overrideText || input;  // ← pakai override kalau ada
+  if (!text.trim() || loading) return;
+  setError("");
+
+  const userMsg = { role: "user", content: text };  // ← pakai text, bukan input
+  const updatedMessages = [...messages, userMsg];
+  setMessages(updatedMessages);
+  setInput("");  // clear input box
+  setLoading(true);
+    try {
+      const payload = updatedMessages.map(m => ({
+        role: m.role,
+        content: typeof m.content === "string" ? m.content : m.content?.reply || JSON.stringify(m.content),
+      }));
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ messages: payload, conversationId }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) { setError(result.error || "Something went wrong"); return; }
+
+      setMessages(prev => [...prev, { role: "assistant", content: result.data }]);
+      if (result.conversationId) {
+        setConversationId(result.conversationId);
+        fetchConversations();
       }
-
-      setResult(data);
     } catch {
-      setError("Network error — please check your connection");
+      setError("Network error");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) summarize();
+const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  // Show nothing while checking auth
-  if (authLoading) return null;
-  if (!user) return null;
+  if (authLoading || !user) return null;
 
   return (
-    <div>
-      <section className="min-h-screen pt-32 pb-20 px-6">
-        <div className="max-w-3xl mx-auto space-y-6">
+    <div className="min-h-screen pt-28 pb-20 px-6">
+      <div className="max-w-4xl mx-auto flex gap-4">
+
+        {/* Sidebar history */}
+        <AnimatePresence>
+          {showHistory && (
+            <motion.div
+              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+              className="w-52 flex-shrink-0"
+            >
+              <ArticleCard className="p-3 flex flex-col gap-2 h-full">
+                <div className="flex justify-between items-center">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">Conversations</p>
+                  <button onClick={startNewChat} className="text-xs text-blue-400 hover:text-blue-300">+ New</button>
+                </div>
+                <div className="flex flex-col gap-1 overflow-y-auto max-h-[500px]">
+                  {conversations.length === 0 ? (
+                    <p className="text-xs text-gray-600 text-center py-4">No conversations yet</p>
+                  ) : conversations.map(c => (
+                    <button key={c._id} onClick={() => loadConversation(c._id)}
+                      className={`text-left px-3 py-2 rounded-xl text-xs hover:bg-white/10 transition ${conversationId === c._id ? "bg-white/10 text-white" : "text-gray-400"}`}>
+                      <p className="truncate font-medium">{c.title}</p>
+                      <p className="text-gray-600 mt-0.5">{new Date(c.updatedAt).toLocaleDateString()}</p>
+                    </button>
+                  ))}
+                </div>
+              </ArticleCard>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Main */}
+        <div className="flex-1 flex flex-col gap-4">
 
           {/* Header */}
-          <div className="text-center space-y-2 mb-8">
-            <h1 className="text-4xl font-bold">AI Media Analyzer</h1>
-            <p className="text-gray-400 text-sm">
-              Paste any article to get an AI summary, sentiment score, and bias detection
-            </p>
-            <p className="text-xs text-gray-500">Logged in as {user.email}</p>
+          <div className="text-center space-y-1">
+            <h1 className="text-4xl font-bold">AI Topic Analyzer</h1>
+            <p className="text-gray-400 text-sm">Ask about any real-world topic</p>
+            <p className="text-xs text-gray-500">{user.email}</p>
           </div>
 
-          {/* Input */}
-          <ArticleCard>
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Paste your article here... (Cmd/Ctrl + Enter to analyze)"
-              className="w-full h-52 bg-transparent outline-none text-base resize-none leading-relaxed"
-            />
-            <div className="flex justify-between items-center mt-2 pt-3 border-t border-white/10">
-              <span className="text-xs text-gray-500">{input.length} characters</span>
-              <span className="text-xs text-gray-500">Cmd/Ctrl + Enter to analyze</span>
-            </div>
-          </ArticleCard>
-
-          {/* Buttons row */}
-          <div className="flex gap-3">
-            <Button
-              onClick={summarize}
-              disabled={loading}
-              className="relative flex-1 px-8 py-3 font-semibold group overflow-hidden rounded-xl bg-white/10 hover:bg-white/20 transition"
-            >
-              <span className="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 blur-xl opacity-0 group-hover:opacity-40 transition" />
-              <span className="relative z-10 flex items-center justify-center gap-2">
-                {loading ? (
-                  <>
-                    <span className="animate-spin inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
-                    Analyzing...
-                  </>
-                ) : "Analyze Article"}
-              </span>
-            </Button>
-
-            {/* History Toggle Button */}
-            <Button
-              onClick={toggleHistory}
-              className="relative px-6 py-3 font-semibold group overflow-hidden rounded-xl bg-white/10 hover:bg-white/20 transition"
-            >
-              <span className="absolute inset-0 bg-gradient-to-r from-green-500 to-teal-500 blur-xl opacity-0 group-hover:opacity-40 transition" />
-              <span className="relative z-10 flex items-center gap-2">
-                {showHistory ? "Hide History" : "History"}
-              </span>
-            </Button>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <p className="text-red-400 text-sm text-center">{error}</p>
-          )}
-
-          {/* History Panel */}
-          <AnimatePresence>
-            {showHistory && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.3 }}
-              >
-                <ArticleCard className="p-4 space-y-3">
-                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Analysis History</p>
-                  {historyLoading ? (
-                    <p className="text-gray-400 text-sm text-center py-4">Loading...</p>
-                  ) : history.length === 0 ? (
-                    <p className="text-gray-400 text-sm text-center py-4">No history yet</p>
-                  ) : (
-                    history.map((item, i) => (
-                      <div key={i} className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-1">
-                        <div className="flex justify-between items-center">
-                          <span className={`text-xs font-bold ${
-                            item.sentiment?.label === "POSITIVE" ? "text-green-400" :
-                            item.sentiment?.label === "NEGATIVE" ? "text-red-400" :
-                            "text-yellow-400"
-                          }`}>
-                            {item.sentiment?.label || "N/A"}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(item.timestamp).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-300 line-clamp-2">{item.summary}</p>
-                        <p className="text-xs text-gray-600 truncate">{item.originalText?.slice(0, 80)}...</p>
-                      </div>
-                    ))
-                  )}
-                </ArticleCard>
-              </motion.div>
+          {/* Messages */}
+          <ArticleCard className="flex flex-col gap-4 min-h-[400px] max-h-[600px] overflow-y-auto">
+            {messages.length === 0 && (
+              <div className="flex-1 flex items-center justify-center py-16">
+                <p className="text-gray-600 text-sm">Ask me about any real-world topic to get started</p>
+              </div>
             )}
-          </AnimatePresence>
 
-          {/* Results */}
-          <AnimatePresence>
-            {result && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.35 }}
-                className="space-y-4"
-              >
-                {/* Summary */}
-                <SummaryBox summary={result.summary} />
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className="max-w-[85%] flex flex-col gap-3">
 
-                {/* Sentiment + Bias row */}
-                <div className="grid grid-cols-2 gap-4">
-                  {result.sentiment && (
-                    <ArticleCard className="p-4 space-y-2">
-                      <p className="text-xs text-gray-500 uppercase tracking-wider">Sentiment</p>
-                      <div className="flex items-center gap-3">
-                        <span className={`text-xl font-bold ${
-                          result.sentiment.label === "POSITIVE" ? "text-green-400" :
-                          result.sentiment.label === "NEGATIVE" ? "text-red-400" :
-                          "text-yellow-400"
-                        }`}>
-                          {result.sentiment.label}
-                        </span>
-                        <span className="text-sm text-gray-400">
-                          {(result.sentiment.score * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-white/10 rounded-full h-1.5 mt-1">
-                        <div
-                          className={`h-1.5 rounded-full transition-all ${
-                            result.sentiment.label === "POSITIVE" ? "bg-green-400" :
-                            result.sentiment.label === "NEGATIVE" ? "bg-red-400" : "bg-yellow-400"
-                          }`}
-                          style={{ width: `${result.sentiment.score * 100}%` }}
-                        />
-                      </div>
-                    </ArticleCard>
-                  )}
+                  {/* Bubble */}
+                  <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+                    msg.role === "user"
+                      ? "bg-blue-600/30 border border-blue-500/30 text-white rounded-tr-sm"
+                      : "bg-white/5 border border-white/10 text-gray-200 rounded-tl-sm"
+                  }`}>
+                    {typeof msg.content === "string" ? msg.content : msg.content?.reply}
+                  </div>
 
-                  {result.bias && (
-                    <ArticleCard className="p-4 space-y-2">
-                      <p className="text-xs text-gray-500 uppercase tracking-wider">Political Bias</p>
-                      <div className="flex items-center gap-3">
-                        <span className={`text-xl font-bold ${
-                          result.bias.label === "LEFT" ? "text-blue-400" :
-                          result.bias.label === "RIGHT" ? "text-red-400" :
-                          result.bias.label === "CENTER" ? "text-green-400" : "text-gray-400"
-                        }`}>
-                          {result.bias.label}
+                  {/* Full analysis — hanya muncul kalau ada category */}
+                  {msg.content?.category && (
+                    <div className="flex flex-col gap-3 w-full">
+
+                      {/* Category + subtopics */}
+                      <div className="flex flex-wrap gap-2">
+                        <span className="px-3 py-1 bg-purple-600/20 border border-purple-500/30 rounded-full text-xs text-purple-300 font-medium">
+                          {msg.content.category}
                         </span>
+                       {msg.content.subtopics?.map((s, j) => (
+  <button
+    key={j}
+    onClick={() => {
+      setInput(s);
+      handleSend(s);
+    }}
+    className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs text-gray-400 hover:bg-white/15 hover:text-white hover:border-white/30 transition cursor-pointer"
+  >
+    {s}
+  </button>
+))}
                       </div>
-                      {result.bias.reason && (
-                        <p className="text-xs text-gray-400 leading-relaxed">{result.bias.reason}</p>
+
+                      {/* Sentiment */}
+                      {msg.content.sentiment && (
+                        <ArticleCard className="p-3 space-y-2">
+                          <p className="text-xs text-gray-500 uppercase tracking-wider">Sentiment</p>
+                          <div className="flex items-center gap-3">
+                            <span className={`text-lg font-bold ${
+                              msg.content.sentiment.label === "POSITIVE" ? "text-green-400" :
+                              msg.content.sentiment.label === "NEGATIVE" ? "text-red-400" : "text-yellow-400"
+                            }`}>{msg.content.sentiment.label}</span>
+                            <span className="text-sm text-gray-400">
+                              {(msg.content.sentiment.score * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-white/10 rounded-full h-1.5">
+                            <div className={`h-1.5 rounded-full transition-all ${
+                              msg.content.sentiment.label === "POSITIVE" ? "bg-green-400" :
+                              msg.content.sentiment.label === "NEGATIVE" ? "bg-red-400" : "bg-yellow-400"
+                            }`} style={{ width: `${msg.content.sentiment.score * 100}%` }} />
+                          </div>
+                        </ArticleCard>
                       )}
-                    </ArticleCard>
+
+                      {/* Heatmap */}
+                      {msg.content.heatmap && (
+                        <ArticleCard className="p-3">
+                          <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Discussion Intensity</p>
+                          <Heatmap data={msg.content.heatmap} />
+                        </ArticleCard>
+                      )}
+                    </div>
                   )}
                 </div>
+              </div>
+            ))}
 
-                {/* Keywords */}
-                {result.keywords?.length > 0 && (
-                  <ArticleCard className="p-4">
-                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Key Topics</p>
-                    <div className="flex flex-wrap gap-2">
-                      {result.keywords.map((kw, i) => (
-                        <span
-                          key={i}
-                          className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-sm text-gray-300"
-                        >
-                          {kw}
-                        </span>
-                      ))}
-                    </div>
-                  </ArticleCard>
-                )}
-              </motion.div>
+            {loading && (
+              <div className="flex justify-start">
+                <div className="px-4 py-3 bg-white/5 border border-white/10 rounded-2xl rounded-tl-sm">
+                  <div className="flex gap-1.5">
+                    {[0,1,2].map(i => (
+                      <motion.span key={i} className="w-1.5 h-1.5 rounded-full bg-gray-400"
+                        animate={{ y: [0,-4,0] }} transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
-          </AnimatePresence>
-        </div>
-      </section>
-      {/* new*/}
-<section className="pb-20 px-6">
-  <div className="max-w-3xl mx-auto space-y-4">
-    <div className="text-center space-y-1 mb-6">
-      <h2 className="text-2xl font-bold">Topic Analyzer</h2>
-      <p className="text-gray-400 text-sm">
-        Ask about any real-world topic for live analysis, classification, and trend data
-      </p>
-    </div>
-    <TopicChatbot />
-  </div>
-</section>
+            <div ref={bottomRef} />
+          </ArticleCard>
 
+          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+
+          {/* Input */}
+          <ArticleCard className="p-3">
+            <div className="flex gap-2 items-end">
+              <textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask about any real-world topic..."
+                rows={2}
+                className="flex-1 bg-transparent outline-none text-sm resize-none leading-relaxed placeholder-gray-600"
+              />
+              <div className="flex flex-col gap-2 items-end flex-shrink-0">
+                <button
+                  onClick={() => setShowHistory(p => !p)}
+                  className="text-xs text-gray-400 hover:text-white px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg transition"
+                >
+                  {showHistory ? "Hide" : "History"}
+                </button>
+                <button
+                  onClick={handleSend}
+                  disabled={loading || !input.trim()}
+                  className="px-4 py-1.5 bg-blue-600/40 hover:bg-blue-600/60 border border-blue-500/30 rounded-lg text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {loading ? "..." : "Send"}
+                </button>
+              </div>
+            </div>
+          </ArticleCard>
+        </div>
+      </div>
     </div>
   );
 }
+
+  
