@@ -1,13 +1,12 @@
 import express from "express";
 import Groq from "groq-sdk";
-import { tavily } from "tavily";
-import bcrypt from "bcryptjs";
+import { tavily } from "@tavily/core";import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 import { validateText } from "./middleware.js";
-import { crawlArticle } from "./crawler.js";
+import { crawlArticle, generateReport } from "./crawler.js";
 import { crawlPTTBoard, crawlPTTArticle } from "./crawlers/ptt.js";          // ← fixed path
-import { Analysis, User, Conversation, Article } from "./db.js";
+import { Analysis, User, Conversation, Article, Report } from "./db.js";
 import {
   searchGoogleNews,
   fetchNewsByTopic,
@@ -35,9 +34,7 @@ function getUserFromToken(req) {
 
 /* ─── AI Init ──────────────────────────────────────────────────────────────── */
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-// const tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY });
-
-/* ─── Groq Sentiment Helper ────────────────────────────────────────────────── */
+const tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY });
 async function analyzeSentiment(text) {
   const input = text.slice(0, 200);
   const completion = await groq.chat.completions.create({
@@ -174,17 +171,17 @@ router.post("/conversation", async (req, res) => {
     const lastUserMsg = messages.filter((m) => m.role === "user").at(-1)?.content;
 
     let searchContext = "";
-    // try {
-    //   const searchResult = await tavilyClient.search(
-    //     typeof lastUserMsg === "string" ? lastUserMsg : JSON.stringify(lastUserMsg),
-    //     { maxResults: 3, searchDepth: "basic" }
-    //   );
-    //   searchContext = searchResult.results
-    //     .map((r) => `${r.title}: ${r.content}`)
-    //     .join("\n\n");
-    // } catch (err) {
-    //   console.error("Tavily search error:", err.message);
-    // }
+    try {
+      const searchResult = await tavilyClient.search(
+        typeof lastUserMsg === "string" ? lastUserMsg : JSON.stringify(lastUserMsg),
+        { maxResults: 3, searchDepth: "basic" }
+      );
+      searchContext = searchResult.results
+        .map((r) => `${r.title}: ${r.content}`)
+        .join("\n\n");
+    } catch (err) {
+      console.error("Tavily search error:", err.message);
+    }
 
     const systemPrompt = {
       role: "system",
@@ -547,6 +544,32 @@ router.get("/analyze/status", async (req, res) => {
     res.json({ total, analyzed, unanalyzed });
   } catch (err) {
     res.status(500).json({ error: "Failed to get status" });
+  }
+});
+
+/* ================================================
+   REPORTS
+   ================================================ */
+
+/** GET /api/reports — list saved reports, newest first */
+router.get("/reports", async (req, res) => {
+  try {
+    const reports = await Report.find().sort({ createdAt: -1 }).limit(20);
+    res.json({ reports });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch reports" });
+  }
+});
+
+/** POST /api/reports/generate — manually trigger a report */
+router.post("/reports/generate", async (req, res) => {
+  try {
+    const report = await generateReport("manual");
+    if (!report) return res.json({ message: "No analyzed articles found — report not created" });
+    res.json({ message: "Report generated", report });
+  } catch (err) {
+    console.error("Report generation error:", err.message);
+    res.status(500).json({ error: "Report generation failed" });
   }
 });
 

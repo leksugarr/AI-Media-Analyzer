@@ -3,7 +3,7 @@ import * as cheerio from "cheerio";
 import cron from "node-cron";
 import Groq from "groq-sdk";
 import { searchGoogleNews, fetchNewsByTopic } from "./crawlers/googleNews.js";
-import { Article } from "./db.js";
+import { Article, Report } from "./db.js";
 
 // ─── Groq Sentiment ────────────────────────────────────────────────────────────
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -173,6 +173,55 @@ export async function runCrawlCycle() {
 }
 
 /**
+ * Generate a report for the last 7 days (or custom range) and save to MongoDB.
+ * @param {"weekly"|"daily"|"manual"} type
+ * @param {Date} [from]  defaults to 7 days ago
+ * @param {Date} [to]    defaults to now
+ */
+export async function generateReport(type = "weekly", from, to) {
+  const now = to || new Date();
+  const start = from || new Date(now - 7 * 24 * 60 * 60 * 1000);
+
+  const articles = await Article.find({
+    analyzed: true,
+    fetchedAt: { $gte: start, $lte: now },
+  }).select("title url source sentiment").lean();
+
+  if (articles.length === 0) {
+    console.log("[Report] No analyzed articles in range — skipping.");
+    return null;
+  }
+
+  const stats = { total: articles.length, positive: 0, negative: 0, neutral: 0 };
+  for (const a of articles) {
+    const label = a.sentiment?.label?.toUpperCase();
+    if (label === "POSITIVE") stats.positive++;
+    else if (label === "NEGATIVE") stats.negative++;
+    else stats.neutral++;
+  }
+
+  const topArticles = articles.slice(0, 5).map((a) => ({
+    title: a.title, url: a.url, source: a.source, sentiment: a.sentiment?.label,
+  }));
+
+  const summary = `Total: ${stats.total}, Positive: ${stats.positive}, Negative: ${stats.negative}, Neutral: ${stats.neutral}. Top article: "${topArticles[0]?.title}"`;
+
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    max_tokens: 300,
+    messages: [
+      { role: "system", content: "Write a concise 3-sentence analyst narrative summarizing this sentiment report data. Be factual and professional." },
+      { role: "user", content: summary },
+    ],
+  });
+  const narrative = completion.choices[0].message.content.trim();
+
+  const report = await Report.create({ type, period: { from: start, to: now }, narrative, stats, topArticles });
+  console.log(`[Report] ${type} report saved — ${stats.total} articles, id: ${report._id}`);
+  return report;
+}
+
+/**
  * Start the cron scheduler. Call once from server.js after DB connects.
  * Default: every 2 hours. Override with NEWS_CRON_SCHEDULE env var.
  */
@@ -192,5 +241,10 @@ export function startNewsScheduler() {
   // Then on schedule
   cron.schedule(schedule, () => {
     runCrawlCycle().catch((err) => console.error("[Scheduler] Scheduled run failed:", err.message));
+  });
+
+  // Weekly report — every Monday at 8am
+  cron.schedule("0 8 * * 1", () => {
+    generateReport("weekly").catch((err) => console.error("[Report] Weekly failed:", err.message));
   });
 }

@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import ArticleCard from "@/components/ArticleCard";
+import FilterSidebar from "@/components/FilterSidebar";
 import { motion } from "framer-motion";
 
 // ─── Keyword frequency counter ─────────────────────────────────────────────────
@@ -74,20 +75,30 @@ export default function DashboardPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [filterAnalyzed, setFilterAnalyzed] = useState("");
   const [msg, setMsg]               = useState("");
+  const [reports, setReports]       = useState([]);
+  const [reportMsg, setReportMsg]   = useState("");
+  const [genReport, setGenReport]   = useState(false);
+
+  // ── Filter state ──────────────────────────────────────────────────────────
+  const [filters, setFilters] = useState({ keyword: "", dateFrom: "", dateTo: "" });
 
   useEffect(() => {
     if (!authLoading && !user) router.push("/login");
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (user) { fetchArticles(); fetchStatus(); }
+    if (user) { fetchArticles(page, filters); fetchStatus(); fetchReports(); }
   }, [user, page, filterAnalyzed]);
 
-  const fetchArticles = async () => {
+  // ── Updated fetchArticles — accepts filters ────────────────────────────────
+  const fetchArticles = async (pageNum = page, activeFilters = filters) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: 50, page });
-      if (filterAnalyzed !== "") params.set("analyzed", filterAnalyzed);
+      const params = new URLSearchParams({ limit: 50, page: pageNum });
+      if (filterAnalyzed !== "")        params.set("analyzed",  filterAnalyzed);
+      if (activeFilters.keyword)        params.set("keyword",   activeFilters.keyword);
+      if (activeFilters.dateFrom)       params.set("dateFrom",  activeFilters.dateFrom);
+      if (activeFilters.dateTo)         params.set("dateTo",    activeFilters.dateTo);
       const res = await fetch(`/api/news?${params}`);
       const data = await res.json();
       setArticles(data.articles || []);
@@ -96,12 +107,45 @@ export default function DashboardPage() {
     setLoading(false);
   };
 
+  // ── Filter handlers ────────────────────────────────────────────────────────
+  const handleFilter = (newFilters) => {
+    setFilters(newFilters);
+    setPage(1);
+    fetchArticles(1, newFilters);
+  };
+
+  const handleReset = () => {
+    const empty = { keyword: "", dateFrom: "", dateTo: "" };
+    setFilters(empty);
+    setPage(1);
+    fetchArticles(1, empty);
+  };
+
   const fetchStatus = async () => {
     try {
       const res = await fetch("/api/sentiment-status");
       const data = await res.json();
       setStatus(data);
     } catch {}
+  };
+
+  const fetchReports = async () => {
+    try {
+      const res = await fetch("/api/reports");
+      const data = await res.json();
+      setReports(data.reports || []);
+    } catch {}
+  };
+
+  const triggerReport = async () => {
+    setGenReport(true); setReportMsg("");
+    try {
+      const res = await fetch("/api/reports-generate", { method: "POST" });
+      const data = await res.json();
+      setReportMsg(data.message || "Report generated");
+      fetchReports();
+    } catch { setReportMsg("Failed to generate report"); }
+    setGenReport(false);
   };
 
   const runBatch = async () => {
@@ -129,160 +173,257 @@ export default function DashboardPage() {
   if (authLoading || !user) return null;
 
   return (
-    <div className="min-h-screen pt-28 pb-20 px-6">
-      <div className="max-w-5xl mx-auto flex flex-col gap-6">
+    // ── Outer flex row: sidebar + main content side by side ──────────────────
+    <div className="flex min-h-screen pt-16">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-gray-400 text-sm mt-1">Keyword frequency & article insights</p>
-          </div>
-          <button
-            onClick={runBatch}
-            disabled={processing}
-            className="px-4 py-2 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/30 rounded-xl text-sm font-medium transition disabled:opacity-40"
-          >
-            {processing ? "Processing..." : "▶ Run Sentiment Batch"}
-          </button>
-        </div>
+      {/* Filter Sidebar — sits outside the max-w container */}
+      <FilterSidebar onFilter={handleFilter} onReset={handleReset} />
 
-        {msg && <p className="text-xs text-green-400 text-center">{msg}</p>}
+      {/* Main content */}
+      <div className="flex-1 overflow-x-hidden">
+        <div className="max-w-5xl mx-auto flex flex-col gap-6 px-6 pt-12 pb-20">
 
-        {/* Status cards */}
-        {status && (
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: "Total articles", value: status.total },
-              { label: "Analyzed",       value: status.analyzed,   color: "text-green-400" },
-              { label: "Pending",        value: status.unanalyzed, color: "text-yellow-400" },
-            ].map((s, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
-                <ArticleCard className="p-4 text-center">
-                  <p className={`text-2xl font-bold ${s.color || "text-white"}`}>{s.value ?? "—"}</p>
-                  <p className="text-xs text-gray-500 mt-1">{s.label}</p>
-                </ArticleCard>
-              </motion.div>
-            ))}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-          {/* Keyword frequency */}
-          <ArticleCard className="flex flex-col gap-3">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">Keyword frequency</p>
-            {loading ? (
-              <p className="text-gray-600 text-sm text-center py-8">Loading...</p>
-            ) : keywords.length === 0 ? (
-              <p className="text-gray-600 text-sm text-center py-8">No keywords found</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {keywords.map(([kw, count], i) => (
-                  <KeywordBar key={kw} keyword={kw} count={count} max={maxCount} index={i} />
-                ))}
-              </div>
-            )}
-          </ArticleCard>
-
-          {/* Sentiment breakdown */}
-          <ArticleCard className="flex flex-col gap-3">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">Sentiment breakdown</p>
-            {loading ? (
-              <p className="text-gray-600 text-sm text-center py-8">Loading...</p>
-            ) : (
-              <div className="flex flex-col gap-3 mt-2">
-                {Object.entries(sentimentCounts).map(([label, count], i) => {
-                  const pct = Math.round((count / articles.length) * 100);
-                  const color = label === "POSITIVE" ? "bg-green-500/60" : label === "NEGATIVE" ? "bg-red-500/60" : "bg-yellow-500/60";
-                  return (
-                    <motion.div key={label} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.1 }} className="flex flex-col gap-1">
-                      <div className="flex justify-between text-xs">
-                        <SentimentBadge label={label} />
-                        <span className="text-gray-400">{count} articles ({pct}%)</span>
-                      </div>
-                      <div className="w-full bg-white/5 rounded-full h-2">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${pct}%` }}
-                          transition={{ delay: i * 0.1 + 0.3, duration: 0.6, ease: "easeOut" }}
-                          className={`h-2 rounded-full ${color}`}
-                        />
-                      </div>
-                    </motion.div>
-                  );
-                })}
-                {Object.keys(sentimentCounts).length === 0 && (
-                  <p className="text-gray-600 text-sm text-center py-8">No analyzed articles yet — run batch first</p>
-                )}
-              </div>
-            )}
-          </ArticleCard>
-        </div>
-
-        {/* Article list */}
-        <ArticleCard className="flex flex-col gap-4">
+          {/* Header */}
           <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">Articles</p>
-            <select
-              value={filterAnalyzed}
-              onChange={e => { setFilterAnalyzed(e.target.value); setPage(1); }}
-              className="text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-gray-300 outline-none"
+            <div>
+              <h1 className="text-3xl font-bold">Dashboard</h1>
+              <p className="text-gray-400 text-sm mt-1">Keyword frequency & article insights</p>
+            </div>
+            <button
+              onClick={runBatch}
+              disabled={processing}
+              className="px-4 py-2 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/30 rounded-xl text-sm font-medium transition disabled:opacity-40"
             >
-              <option value="">All</option>
-              <option value="true">Analyzed</option>
-              <option value="false">Pending</option>
-            </select>
+              {processing ? "Processing..." : "▶ Run Sentiment Batch"}
+            </button>
           </div>
 
-          {loading ? (
-            <p className="text-gray-600 text-sm text-center py-8">Loading...</p>
-          ) : articles.length === 0 ? (
-            <p className="text-gray-600 text-sm text-center py-8">No articles found</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {articles.map((a, i) => (
-                <motion.div
-                  key={a._id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.02 }}
-                  className="flex items-start justify-between gap-3 px-3 py-2 rounded-xl hover:bg-white/5 transition"
-                >
-                  <div className="flex-1 min-w-0">
-                    <a href={a.url} target="_blank" rel="noopener noreferrer"
-                      className="text-sm text-gray-200 hover:text-white transition truncate block">
-                      {a.title}
-                    </a>
-                    <div className="flex gap-2 mt-1 flex-wrap">
-                      <span className="text-[10px] text-gray-600">{a.source}</span>
-                      {a.keywords?.slice(0, 3).map(k => (
-                        <span key={k} className="text-[10px] px-1.5 py-0.5 bg-white/5 rounded text-gray-500">{k}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex-shrink-0">
-                    {a.analyzed ? <SentimentBadge label={a.sentiment?.label} /> : (
-                      <span className="text-[10px] text-gray-600 border border-white/10 rounded-full px-2 py-0.5">pending</span>
-                    )}
-                  </div>
+          {msg && <p className="text-xs text-green-400 text-center">{msg}</p>}
+
+          {/* Active filter notice */}
+          {(filters.keyword || filters.dateFrom || filters.dateTo) && (
+            <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-2">
+              Showing filtered results
+              {filters.keyword  && <> · keyword: <strong>"{filters.keyword}"</strong></>}
+              {filters.dateFrom && <> · from: <strong>{filters.dateFrom}</strong></>}
+              {filters.dateTo   && <> · to: <strong>{filters.dateTo}</strong></>}
+            </div>
+          )}
+
+          {/* Status cards */}
+          {status && (
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { label: "Total articles", value: status.total },
+                { label: "Analyzed",       value: status.analyzed,   color: "text-green-400" },
+                { label: "Pending",        value: status.unanalyzed, color: "text-yellow-400" },
+              ].map((s, i) => (
+                <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
+                  <ArticleCard className="p-4 text-center">
+                    <p className={`text-2xl font-bold ${s.color || "text-white"}`}>{s.value ?? "—"}</p>
+                    <p className="text-xs text-gray-500 mt-1">{s.label}</p>
+                  </ArticleCard>
                 </motion.div>
               ))}
             </div>
           )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center gap-2 mt-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-3 py-1 text-xs bg-white/5 rounded-lg disabled:opacity-30 hover:bg-white/10 transition">← Prev</button>
-              <span className="text-xs text-gray-500 px-2 py-1">{page} / {totalPages}</span>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="px-3 py-1 text-xs bg-white/5 rounded-lg disabled:opacity-30 hover:bg-white/10 transition">Next →</button>
-            </div>
-          )}
-        </ArticleCard>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
+            {/* Keyword frequency */}
+            <ArticleCard className="flex flex-col gap-3">
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Keyword frequency</p>
+              {loading ? (
+                <p className="text-gray-600 text-sm text-center py-8">Loading...</p>
+              ) : keywords.length === 0 ? (
+                <p className="text-gray-600 text-sm text-center py-8">No keywords found</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {keywords.map(([kw, count], i) => (
+                    <KeywordBar key={kw} keyword={kw} count={count} max={maxCount} index={i} />
+                  ))}
+                </div>
+              )}
+            </ArticleCard>
+
+            {/* Sentiment breakdown */}
+            <ArticleCard className="flex flex-col gap-3">
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Sentiment breakdown</p>
+              {loading ? (
+                <p className="text-gray-600 text-sm text-center py-8">Loading...</p>
+              ) : (
+                <div className="flex flex-col gap-3 mt-2">
+                  {Object.entries(sentimentCounts).map(([label, count], i) => {
+                    const pct = Math.round((count / articles.length) * 100);
+                    const color = label === "POSITIVE" ? "bg-green-500/60" : label === "NEGATIVE" ? "bg-red-500/60" : "bg-yellow-500/60";
+                    return (
+                      <motion.div key={label} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.1 }} className="flex flex-col gap-1">
+                        <div className="flex justify-between text-xs">
+                          <SentimentBadge label={label} />
+                          <span className="text-gray-400">{count} articles ({pct}%)</span>
+                        </div>
+                        <div className="w-full bg-white/5 rounded-full h-2">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${pct}%` }}
+                            transition={{ delay: i * 0.1 + 0.3, duration: 0.6, ease: "easeOut" }}
+                            className={`h-2 rounded-full ${color}`}
+                          />
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                  {Object.keys(sentimentCounts).length === 0 && (
+                    <p className="text-gray-600 text-sm text-center py-8">No analyzed articles yet — run batch first</p>
+                  )}
+                </div>
+              )}
+            </ArticleCard>
+          </div>
+
+          {/* Reports */}
+          <ArticleCard className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Weekly Reports</p>
+              <button
+                onClick={triggerReport}
+                disabled={genReport}
+                className="px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/30 rounded-xl text-xs font-medium transition disabled:opacity-40"
+              >
+                {genReport ? "Generating..." : "⚡ Generate Now"}
+              </button>
+            </div>
+
+            {reportMsg && <p className="text-xs text-green-400">{reportMsg}</p>}
+
+            {reports.length === 0 ? (
+              <p className="text-gray-600 text-sm text-center py-6">No reports yet — generate one or wait for Monday 8am</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {reports.map((r, i) => (
+                  <motion.div
+                    key={r._id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="p-4 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 font-medium uppercase">
+                          {r.type}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(r.period?.from).toLocaleDateString()} – {new Date(r.period?.to).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-gray-600">{new Date(r.createdAt).toLocaleString()}</span>
+                    </div>
+
+                    {r.stats && (
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { label: "Total",    value: r.stats.total,    color: "text-white" },
+                          { label: "Positive", value: r.stats.positive, color: "text-green-400" },
+                          { label: "Negative", value: r.stats.negative, color: "text-red-400" },
+                          { label: "Neutral",  value: r.stats.neutral,  color: "text-yellow-400" },
+                        ].map((s) => (
+                          <div key={s.label} className="text-center p-2 rounded-lg bg-white/5">
+                            <p className={`text-lg font-bold ${s.color}`}>{s.value ?? 0}</p>
+                            <p className="text-[10px] text-gray-500">{s.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {r.narrative && (
+                      <p className="text-xs text-gray-400 leading-relaxed border-l-2 border-indigo-500/40 pl-3">
+                        {r.narrative}
+                      </p>
+                    )}
+
+                    {r.topArticles?.length > 0 && (
+                      <div className="flex flex-col gap-1">
+                        <p className="text-[10px] text-gray-600 uppercase tracking-wider">Top Articles</p>
+                        {r.topArticles.map((a, j) => (
+                          <div key={j} className="flex items-center justify-between gap-2 text-xs">
+                            <a href={a.url} target="_blank" rel="noopener noreferrer"
+                              className="text-gray-400 hover:text-white truncate transition">{a.title}</a>
+                            <SentimentBadge label={a.sentiment} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </ArticleCard>
+
+          {/* Article list */}
+          <ArticleCard className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Articles</p>
+              <select
+                value={filterAnalyzed}
+                onChange={e => { setFilterAnalyzed(e.target.value); setPage(1); }}
+                className="text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-gray-300 outline-none"
+              >
+                <option value="">All</option>
+                <option value="true">Analyzed</option>
+                <option value="false">Pending</option>
+              </select>
+            </div>
+
+            {loading ? (
+              <p className="text-gray-600 text-sm text-center py-8">Loading...</p>
+            ) : articles.length === 0 ? (
+              <p className="text-gray-600 text-sm text-center py-8">No articles found</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {articles.map((a, i) => (
+                  <motion.div
+                    key={a._id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.02 }}
+                    className="flex items-start justify-between gap-3 px-3 py-2 rounded-xl hover:bg-white/5 transition"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <a href={a.url} target="_blank" rel="noopener noreferrer"
+                        className="text-sm text-gray-200 hover:text-white transition truncate block">
+                        {a.title}
+                      </a>
+                      <div className="flex gap-2 mt-1 flex-wrap">
+                        <span className="text-[10px] text-gray-600">{a.source}</span>
+                        {a.keywords?.slice(0, 3).map(k => (
+                          <span key={k} className="text-[10px] px-1.5 py-0.5 bg-white/5 rounded text-gray-500">{k}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0">
+                      {a.analyzed ? <SentimentBadge label={a.sentiment?.label} /> : (
+                        <span className="text-[10px] text-gray-600 border border-white/10 rounded-full px-2 py-0.5">pending</span>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex justify-center gap-2 mt-2">
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                  className="px-3 py-1 text-xs bg-white/5 rounded-lg disabled:opacity-30 hover:bg-white/10 transition">← Prev</button>
+                <span className="text-xs text-gray-500 px-2 py-1">{page} / {totalPages}</span>
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                  className="px-3 py-1 text-xs bg-white/5 rounded-lg disabled:opacity-30 hover:bg-white/10 transition">Next →</button>
+              </div>
+            )}
+          </ArticleCard>
+
+        </div>
       </div>
     </div>
   );

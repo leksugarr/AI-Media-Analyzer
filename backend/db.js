@@ -105,3 +105,15 @@ articleSchema.index({ analyzed: 1, fetchedAt: -1 });
 articleSchema.index({ keywords: 1, fetchedAt: -1 });
 
 export const Article = mongoose.model("Article", articleSchema);
+
+// ─── Report Schema ─────────────────────────────────────────────────────────────
+const reportSchema = new mongoose.Schema({
+  type:        { type: String, enum: ["weekly", "daily", "manual"], required: true },
+  period:      { from: Date, to: Date },
+  narrative:   { type: String, default: "" },
+  stats:       { total: Number, positive: Number, negative: Number, neutral: Number },
+  topArticles: [{ title: String, url: String, sentiment: String, source: String }],
+  createdAt:   { type: Date, default: Date.now },
+});
+
+export const Report = mongoose.model("Report", reportSchema);
