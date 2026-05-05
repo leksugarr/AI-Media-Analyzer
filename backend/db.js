@@ -96,6 +96,32 @@ const articleSchema = new mongoose.Schema(
       score: { type: Number, default: null },
     },
     summary: { type: String, default: "" },
+    embedding: { type: [Number], default: [] },
+
+    // ─── Credibility (Groq-based fake news scoring) ───────────────────────────
+    credibility: {
+      label:      { type: String, enum: ["credible", "suspicious", "likely_fake"], default: null },
+      score:      { type: Number, default: null },   // 0–1, higher = more suspicious
+      reason:     { type: String, default: "" },     // short Groq explanation
+      analyzedAt: { type: Date,   default: null },
+    },
+
+    // ─── Topic Cluster (Groq-based topic modeling) ────────────────────────────
+    topicCluster: {
+      label:      { type: String, default: null },   // e.g. "科技產業", "政治選舉", "經濟金融"
+      confidence: { type: Number, default: null },   // 0–1
+      assignedAt: { type: Date,   default: null },
+    },
+
+
+      // ─── Stance Analysis (Groq-based) ────────────────────────────────────────────
+    stance: {
+      label:      { type: String, enum: ["支持", "反對", "中立"], default: null },
+      reason:     { type: String, default: "" },
+      analyzedAt: { type: Date, default: null },
+    },
+    
+
   },
   { timestamps: true }
 );
@@ -103,6 +129,7 @@ const articleSchema = new mongoose.Schema(
 articleSchema.index({ url: 1 }, { unique: true });
 articleSchema.index({ analyzed: 1, fetchedAt: -1 });
 articleSchema.index({ keywords: 1, fetchedAt: -1 });
+articleSchema.index({ embedding: 1 });
 
 export const Article = mongoose.model("Article", articleSchema);
 
@@ -117,3 +144,29 @@ const reportSchema = new mongoose.Schema({
 });
 
 export const Report = mongoose.model("Report", reportSchema);
+
+// ─── Keyword Suggestion Schema ─────────────────────────────────────────────────
+// Groq-suggested trending keywords waiting for user approval
+const keywordSuggestionSchema = new mongoose.Schema({
+  keyword:     { type: String, required: true, trim: true },
+  reason:      { type: String, default: "" },   // Groq's explanation of why it's trending
+  source:      { type: String, default: "" },   // which articles triggered the suggestion
+  status:      { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
+  suggestedAt: { type: Date, default: Date.now },
+  decidedAt:   { type: Date, default: null },
+});
+
+keywordSuggestionSchema.index({ keyword: 1, status: 1 });
+export const KeywordSuggestion = mongoose.model("KeywordSuggestion", keywordSuggestionSchema);
+
+// ─── Watchlist Keyword Schema ──────────────────────────────────────────────────
+// User-approved keywords the crawler actively monitors every cycle
+const watchlistKeywordSchema = new mongoose.Schema({
+  keyword:   { type: String, required: true, trim: true, unique: true },
+  locale:    { type: String, default: "zh-TW" },
+  label:     { type: String, default: "" },   // display name
+  addedAt:   { type: Date, default: Date.now },
+  active:    { type: Boolean, default: true },
+});
+
+export const WatchlistKeyword = mongoose.model("WatchlistKeyword", watchlistKeywordSchema);

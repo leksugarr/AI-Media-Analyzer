@@ -5,27 +5,54 @@ import { useState } from "react";
  * FilterSidebar
  *
  * Props:
- *   onFilter({ keyword, dateFrom, dateTo }) — called when user applies filters
- *   onReset()                               — called when user clears all filters
+ *   onFilter({ keyword, dateFrom, dateTo, source, sentiment }) — called when user applies filters
+ *   onReset()                                                  — called when user clears all filters
  */
+
+const SOURCES = [
+  { value: "",           label: "All Sources" },
+  { value: "googleNews", label: "Google News" },
+  { value: "ptt",        label: "PTT" },
+];
+
+const SENTIMENTS = [
+  { value: "",         label: "All",      dot: "#4a5a7a" },
+  { value: "POSITIVE", label: "Positive", dot: "#4ade80" },
+  { value: "NEGATIVE", label: "Negative", dot: "#f87171" },
+  { value: "NEUTRAL",  label: "Neutral",  dot: "#facc15" },
+];
+
+const CREDIBILITIES = [
+  { value: "",            label: "All",          dot: "#4a5a7a" },
+  { value: "credible",    label: "✅ Credible",   dot: "#4ade80" },
+  { value: "suspicious",  label: "⚠️ Suspicious", dot: "#fbbf24" },
+  { value: "likely_fake", label: "🚨 Likely Fake", dot: "#f87171" },
+];
+
 export default function FilterSidebar({ onFilter, onReset }) {
-  const [keyword, setKeyword]   = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo]     = useState("");
-  const [open, setOpen]         = useState(true); // sidebar collapsed state
+  const [keyword, setKeyword]         = useState("");
+  const [dateFrom, setDateFrom]       = useState("");
+  const [dateTo, setDateTo]           = useState("");
+  const [source, setSource]           = useState("");
+  const [sentiment, setSentiment]     = useState("");
+  const [credibility, setCredibility] = useState("");
+  const [open, setOpen]               = useState(true);
 
   function handleApply() {
-    onFilter({ keyword: keyword.trim(), dateFrom, dateTo });
+    onFilter({ keyword: keyword.trim(), dateFrom, dateTo, source, sentiment, credibility });
   }
 
   function handleReset() {
     setKeyword("");
     setDateFrom("");
     setDateTo("");
+    setSource("");
+    setSentiment("");
+    setCredibility("");
     onReset();
   }
 
-  const hasFilters = keyword || dateFrom || dateTo;
+  const hasFilters = keyword || dateFrom || dateTo || source || sentiment || credibility;
 
   return (
     <aside
@@ -103,7 +130,7 @@ export default function FilterSidebar({ onFilter, onReset }) {
 
       {/* Sidebar content */}
       {open && (
-        <div style={{ padding: "16px 20px 24px", display: "flex", flexDirection: "column", gap: 24, marginTop: 44 }}>
+        <div style={{ padding: "16px 20px 24px", display: "flex", flexDirection: "column", gap: 24, marginTop: 44, overflowY: "auto" }}>
 
           {/* Header */}
           <div>
@@ -131,6 +158,54 @@ export default function FilterSidebar({ onFilter, onReset }) {
                 onKeyDown={(e) => e.key === "Enter" && handleApply()}
                 style={{ ...inputStyle, paddingLeft: 32 }}
               />
+            </div>
+          </div>
+
+          {/* Source */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={labelStyle}>Source</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {SOURCES.map((s) => (
+                <ToggleButton
+                  key={s.value}
+                  label={s.label}
+                  active={source === s.value}
+                  dotColor="#2a4fff"
+                  onClick={() => setSource(s.value)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Sentiment */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={labelStyle}>Sentiment</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {SENTIMENTS.map((s) => (
+                <ToggleButton
+                  key={s.value}
+                  label={s.label}
+                  active={sentiment === s.value}
+                  dotColor={s.dot}
+                  onClick={() => setSentiment(s.value)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Credibility */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={labelStyle}>Credibility</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {CREDIBILITIES.map((c) => (
+                <ToggleButton
+                  key={c.value}
+                  label={c.label}
+                  active={credibility === c.value}
+                  dotColor={c.dot}
+                  onClick={() => setCredibility(c.value)}
+                />
+              ))}
             </div>
           </div>
 
@@ -165,19 +240,36 @@ export default function FilterSidebar({ onFilter, onReset }) {
           {hasFilters && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {keyword && (
-                <Pill label={`"${keyword}"`} onRemove={() => { setKeyword(""); onFilter({ keyword: "", dateFrom, dateTo }); }} />
+                <Pill label={`"${keyword}"`} onRemove={() => { setKeyword(""); onFilter({ keyword: "", dateFrom, dateTo, source, sentiment, credibility }); }} />
+              )}
+              {source && (
+                <Pill label={SOURCES.find(s => s.value === source)?.label || source} onRemove={() => { setSource(""); onFilter({ keyword, dateFrom, dateTo, source: "", sentiment, credibility }); }} />
+              )}
+              {sentiment && (
+                <Pill
+                  label={SENTIMENTS.find(s => s.value === sentiment)?.label || sentiment}
+                  color={SENTIMENTS.find(s => s.value === sentiment)?.dot}
+                  onRemove={() => { setSentiment(""); onFilter({ keyword, dateFrom, dateTo, source, sentiment: "", credibility }); }}
+                />
+              )}
+              {credibility && (
+                <Pill
+                  label={CREDIBILITIES.find(c => c.value === credibility)?.label || credibility}
+                  color={CREDIBILITIES.find(c => c.value === credibility)?.dot}
+                  onRemove={() => { setCredibility(""); onFilter({ keyword, dateFrom, dateTo, source, sentiment, credibility: "" }); }}
+                />
               )}
               {dateFrom && (
-                <Pill label={`From ${dateFrom}`} onRemove={() => { setDateFrom(""); onFilter({ keyword, dateFrom: "", dateTo }); }} />
+                <Pill label={`From ${dateFrom}`} onRemove={() => { setDateFrom(""); onFilter({ keyword, dateFrom: "", dateTo, source, sentiment, credibility }); }} />
               )}
               {dateTo && (
-                <Pill label={`To ${dateTo}`} onRemove={() => { setDateTo(""); onFilter({ keyword, dateFrom, dateTo: "" }); }} />
+                <Pill label={`To ${dateTo}`} onRemove={() => { setDateTo(""); onFilter({ keyword, dateFrom, dateTo: "", source, sentiment, credibility }); }} />
               )}
             </div>
           )}
 
           {/* Buttons */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <button onClick={handleApply} style={applyBtnStyle}>
               Apply Filters
             </button>
@@ -194,13 +286,45 @@ export default function FilterSidebar({ onFilter, onReset }) {
   );
 }
 
-function Pill({ label, onRemove }) {
+// ─── Shared toggle button ──────────────────────────────────────────────────────
+function ToggleButton({ label, active, dotColor, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: active ? "#1a2540" : "transparent",
+        border: `1px solid ${active ? dotColor : "#1e2538"}`,
+        borderRadius: 8,
+        color: active ? "#c8d3f0" : "#4a5a7a",
+        fontSize: 12,
+        padding: "7px 12px",
+        cursor: "pointer",
+        textAlign: "left",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        transition: "all 0.15s",
+        width: "100%",
+      }}
+    >
+      <span style={{
+        width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+        background: active ? dotColor : "#1e2538",
+        transition: "background 0.15s",
+      }} />
+      {label}
+    </button>
+  );
+}
+
+// ─── Pill ──────────────────────────────────────────────────────────────────────
+function Pill({ label, color, onRemove }) {
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 4,
       background: "#1a2540", border: "1px solid #2a3a60",
       borderRadius: 20, padding: "2px 8px",
-      color: "#7c9ef5", fontSize: 11,
+      color: color || "#7c9ef5", fontSize: 11,
     }}>
       {label}
       <button
@@ -211,6 +335,7 @@ function Pill({ label, onRemove }) {
   );
 }
 
+// ─── Styles ────────────────────────────────────────────────────────────────────
 const labelStyle = {
   color: "#7c8db5",
   fontSize: 11,
@@ -249,6 +374,7 @@ const applyBtnStyle = {
   padding: "9px 0",
   cursor: "pointer",
   letterSpacing: 0.3,
+  width: "100%",
 };
 
 const resetBtnStyle = {
@@ -259,4 +385,5 @@ const resetBtnStyle = {
   fontSize: 12,
   padding: "7px 0",
   cursor: "pointer",
+  width: "100%",
 };

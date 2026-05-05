@@ -1,82 +1,93 @@
-# Sentiment_Analyzer
+# Sentiment_Analyzer (輿情分析系統)
 
-AI-Powered Summary & Sentiment Analyzer with real-time news crawling and sentiment analysis.
+AI-powered opinion monitoring platform that automatically collects, analyzes, and predicts social sentiment across multiple sources. Track keywords, detect fake news, model topics, and receive insights via a dashboard and LINE Bot.
 
 ## Table of Contents
 
+- [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
-- [Backend Setup](#backend-setup)
 - [Installation](#installation)
 - [Environment Configuration](#environment-configuration)
-- [Running the Backend](#running-the-backend)
+- [Running the App](#running-the-app)
 - [API Endpoints](#api-endpoints)
+- [Features](#features)
 - [Troubleshooting](#troubleshooting)
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 16, React 19, Tailwind CSS, Framer Motion |
+| Backend | Express.js, Node.js (ESM — `import/export` only) |
+| Database | MongoDB + Mongoose |
+| AI / Search | Groq (`llama-3.3-70b-versatile`), Tavily, local embedder |
+| Auth | JWT + bcrypt |
+| Bot | LINE Messaging API (`@line/bot-sdk` v3+) |
 
 ## Project Structure
 
 ```
 Sentiment_Analyzer/
-├── backend/                    # Node.js Express backend
-│   ├── crawlers/              # Web scrapers
-│   │   ├── googleNews.js      # Google News RSS parser
-│   │   └── ptt.js             # PTT forum crawler
-│   ├── config.js              # Configuration management
-│   ├── db.js                  # MongoDB schemas and connections
-│   ├── server.js              # Express server entry point
-│   ├── routes.js              # API routes
-│   ├── middleware.js          # Custom middleware
-│   ├── crawler.js             # Scheduler for auto-crawling
-│   ├── .env                   # Environment variables
-│   └── package.json           # Backend dependencies
-├── src/                        # Frontend React/Next.js code
-│   ├── app/                   # Next.js app directory
-│   ├── components/            # React components
-│   └── context/               # React context
-└── README.md                  # This file
+├── package.json                  # Frontend dependencies
+├── backend/
+│   ├── server.js
+│   ├── routes.js
+│   ├── config.js
+│   ├── db.js
+│   ├── middleware.js
+│   ├── crawler.js                # Auto-crawl scheduler + AI pipelines
+│   ├── embedder.js               # Local semantic embeddings
+│   ├── package.json              # Backend dependencies (separate)
+│   └── crawlers/
+│       ├── googleNews.js
+│       └── ptt.js
+└── src/
+    ├── app/
+    │   ├── dashboard/page.jsx    # Main dashboard
+    │   ├── login/page.jsx
+    │   ├── signup/page.jsx
+    │   └── api/                  # Next.js API routes (proxies to Express)
+    ├── components/
+    │   ├── ArticleCard.jsx
+    │   ├── KeywordHeatmap.jsx
+    │   ├── KeywordWatchlistPanel.jsx
+    │   ├── StancePanel.jsx
+    │   ├── TopicModelingPanel.jsx
+    │   └── TrendPredictionPanel.jsx
+    └── context/
+        └── AuthContext.jsx
 ```
+
+> ⚠️ There are **two separate `node_modules`** — one at root (frontend) and one inside `backend/`. Install dependencies in both.
 
 ## Prerequisites
 
-- **Node.js** v18+ 
+- **Node.js** v18+
 - **MongoDB** (Atlas recommended)
 - **API Keys:**
-  - [GROQ API Key](https://console.groq.com) - For AI summarization & sentiment analysis
-  - [TAVILY API Key](https://tavily.com) - For real-time web search (optional)
+  - [Groq API Key](https://console.groq.com) — AI analysis, summarization, topic modeling, stance, credibility
+  - [Tavily API Key](https://tavily.com) — real-time web search for conversations
+  - LINE Channel Secret + Access Token — for LINE Bot
 
-## Backend Setup
+## Installation
 
-### Installation
+### Frontend
 
-1. Navigate to backend directory:
-```bash
-cd backend
-```
-
-2. Install dependencies:
 ```bash
 npm install
 ```
 
-### Dependencies Installed
+### Backend
 
-The backend requires these packages:
-
-- **Express.js** (v5.1.0) - Web framework
-- **Mongoose** (v8.0.0) - MongoDB ODM
-- **Groq SDK** (v0.7.0) - AI/LLM integration for summarization & sentiment
-- **CORS** (v2.8.5) - Cross-origin resource sharing
-- **dotenv** (v17.2.3) - Environment variables
-- **bcryptjs** (v2.4.3) - Password hashing for authentication
-- **jsonwebtoken** (v9.0.0) - JWT authentication
-- **node-fetch** (v3.3.2) - HTTP client
-- **cheerio** (v1.0.0) - HTML parsing
-- **node-cron** (v3.0.3) - Task scheduling
-- **tavily** (v0.2.0) - Web search API client
+```bash
+cd backend
+npm install
+```
 
 ## Environment Configuration
 
-Create a `.env` file in the `backend/` directory with the following variables:
+Create a `.env` file in the `backend/` directory:
 
 ```env
 # Server
@@ -84,7 +95,7 @@ PORT=5000
 NODE_ENV=development
 
 # Database
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database_name?appName=Cluster-1
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/dbname
 
 # API Keys
 GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxx
@@ -95,160 +106,164 @@ NEWS_CRON_SCHEDULE=0 */2 * * *
 
 # CORS
 CORS_ORIGIN=http://localhost:3000
+
+# LINE Bot
+LINE_CHANNEL_SECRET=xxxxxxxxxxxxxxxxxxxxxx
+LINE_CHANNEL_ACCESS_TOKEN=xxxxxxxxxxxxxxxxxxxxxx
 ```
 
-### Getting API Keys
+## Running the App
 
-1. **GROQ API Key:**
-   - Visit [https://console.groq.com](https://console.groq.com)
-   - Sign up or log in
-   - Create an API key
-   - Copy and paste into `.env`
-
-2. **TAVILY API Key (Optional):**
-   - Visit [https://tavily.com](https://tavily.com)
-   - Sign up for developer access
-   - Get your API key
-   - Copy and paste into `.env`
-
-3. **MongoDB Connection String:**
-   - Create a free cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
-   - Get the connection string from the Cluster > Connect > Drivers section
-   - Replace `<password>` and `<database>` in the connection string
-
-## Running the Backend
-
-### Development Mode
-
-Start the backend server:
+### Backend (port 5000)
 
 ```bash
+cd backend
 npm run dev
 ```
 
 Expected output:
 ```
 ✅ MongoDB connected successfully
-✅ Database connected
 [Scheduler] News crawler scheduled: "0 */2 * * *"
 Backend running on http://localhost:5000
 ```
 
-### Health Check
+### Frontend (port 3000)
 
-Test if the backend is running:
+```bash
+npm run dev
+```
+
+### Health Check
 
 ```bash
 curl http://localhost:5000/health
 ```
 
-Response:
-```json
-{
-  "status": "ok",
-  "environment": "development",
-  "timestamp": "2026-05-04T08:42:37.999Z"
-}
-```
-
 ## API Endpoints
 
-### News Search
+All Express routes are prefixed with `/api` on port 5000.
 
-**POST /api/news/keywords**
-- Search news by keywords
-- Body: `{ keywords: string[], locale?: string, limit?: number, save?: boolean }`
-- Returns: Array of articles
+### Auth
+| Method | Route | Description |
+|---|---|---|
+| POST | `/auth/signup` | Register new user |
+| POST | `/auth/login` | Login, returns JWT |
 
-**POST /api/news/topic**
-- Search news by topic (topStories, technology, business, etc.)
-- Body: `{ topic?: string, locale?: string, limit?: number, save?: boolean }`
-- Returns: Array of articles
+### News & Crawling
+| Method | Route | Description |
+|---|---|---|
+| GET | `/news/latest` | Fetch articles (filterable by keyword, sentiment, credibility, date, page) |
+| POST | `/news/search` | Search Google News by keyword |
+| POST | `/crawl` | Manually trigger crawl |
 
 ### Analysis
+| Method | Route | Description |
+|---|---|---|
+| POST | `/analyze` | Summarize + sentiment for one article |
+| POST | `/analyze/batch` | Batch sentiment pipeline |
+| GET | `/analyze/status` | `{ total, analyzed, unanalyzed }` |
 
-**POST /api/analyze/sentiment**
-- Analyze sentiment of text
-- Body: `{ text: string }`
-- Returns: Sentiment score and label
+### Semantic Search
+| Method | Route | Description |
+|---|---|---|
+| POST | `/semantic-search` | Vector similarity search by query |
+| GET | `/similar/:id` | Top 5 similar articles |
+| POST | `/embed/run` | Manually trigger embedding pipeline |
 
-**POST /api/analyze/summarize**
-- Summarize long text
-- Body: `{ text: string, length?: "short" | "medium" | "long" }`
-- Returns: Summarized text
+### Credibility (Fake News Detection)
+| Method | Route | Description |
+|---|---|---|
+| GET | `/credibility/status` | `{ total, credible, suspicious, likely_fake }` |
+| POST | `/credibility/run` | Manually trigger credibility pipeline |
 
-### Authentication
+### Topic Modeling
+| Method | Route | Description |
+|---|---|---|
+| GET | `/topics/status` | Clustering stats + distribution |
+| GET | `/topics/distribution` | Per-topic sentiment breakdown (`?days=7\|30\|90\|365`) |
+| POST | `/topics/run` | Manually trigger topic pipeline |
 
-**POST /api/auth/signup**
-- Register new user
-- Body: `{ email: string, password: string }`
+### Stance Analysis
+| Method | Route | Description |
+|---|---|---|
+| GET | `/stance/status` | `{ total, scored, unscored, distribution[] }` |
+| POST | `/stance/run` | Manually trigger stance pipeline |
 
-**POST /api/auth/login**
-- Login user
-- Body: `{ email: string, password: string }`
-- Returns: JWT token
+### Trends
+| Method | Route | Description |
+|---|---|---|
+| GET | `/trends` | Daily article volume + 7-day Groq forecast |
 
-### Chat
+### Keyword Watchlist
+| Method | Route | Description |
+|---|---|---|
+| GET | `/watchlist` | List watched keywords |
+| POST | `/watchlist` | Add keyword |
+| DELETE | `/watchlist/:id` | Remove keyword |
+| PATCH | `/watchlist/:id/toggle` | Enable / disable keyword |
 
-**POST /api/chat**
-- Chat with AI assistant
-- Body: `{ messages: Array<{role: string, content: string}> }`
-- Returns: AI response
+### Reports
+| Method | Route | Description |
+|---|---|---|
+| GET | `/reports` | List generated reports |
+| POST | `/reports/generate` | Manually generate report |
 
-## Scheduler
+### Conversations (AI Chat)
+| Method | Route | Description |
+|---|---|---|
+| POST | `/conversation` | Multi-turn chat with Groq + Tavily search |
+| GET | `/conversations` | List conversations |
 
-The backend includes an auto-crawling scheduler that:
+### LINE Bot
+| Method | Route | Description |
+|---|---|---|
+| POST | `/line/webhook` | LINE messaging webhook |
 
-- **Runs every 2 hours** (configurable via `NEWS_CRON_SCHEDULE` env var)
-- Fetches articles from Google News
-- Stores articles in MongoDB
-- Avoids duplicates via URL index
+**LINE Bot commands:** `搜尋 <keyword>`, `報告`, `狀態`, `幫助` — anything else triggers a Groq reply in Traditional Chinese.
 
-Cron expression format: `"0 */2 * * *"`
-- `"0 * * * *"` → every hour
-- `"0 */2 * * *"` → every 2 hours (default)
-- `"0 8 * * *"` → every day at 8am
+## Features
+
+### Post-Crawl AI Pipeline
+
+After each crawl cycle, pipelines fire automatically in sequence:
+
+| Delay | Pipeline |
+|---|---|
+| 0s | Sentiment analysis |
+| 15s | Semantic embedding |
+| 30s | Keyword suggestions |
+| 45s | Credibility scoring (credible / suspicious / likely_fake) |
+| 60s | Topic classification (10 fixed Chinese topic labels) |
+| 75s | Stance analysis (支持 / 反對 / 中立) |
+
+Weekly reports are generated every Monday at 8:00am via cron (`0 8 * * 1`).
+
+### Dashboard Layout
+
+Header → Status cards → Keyword frequency + Sentiment breakdown → Keyword Watchlist → Sentiment Heatmap (12-week) → Topic Modeling → Stance Analysis → Trend Prediction → Reports → Article list
+
+### Topic Labels (Fixed Set)
+
+`科技產業` · `政治選舉` · `經濟金融` · `國際關係` · `社會民生` · `環境氣候` · `健康醫療` · `娛樂文化` · `軍事安全` · `教育學術`
 
 ## Troubleshooting
 
-### Backend Won't Start
+**`GROQ_API_KEY is required`**
+Make sure `backend/.env` exists and the key is set.
 
-**Error: "GROQ_API_KEY is required"**
-- Make sure `.env` file exists in `backend/` directory
-- Verify `GROQ_API_KEY` is set and not empty
-- Run `npm run dev` again
+**MongoDB connection failed**
+Check `MONGODB_URI` in `.env` and verify your Atlas IP whitelist.
 
-**Error: "MongoDB connection failed"**
-- Check your `MONGODB_URI` in `.env`
-- Ensure MongoDB Atlas cluster is active
-- Verify IP whitelist allows your connection
+**Module not found**
+Run `npm install` in both the root directory and `backend/`. There are two separate dependency trees.
 
-**Error: "Module not found"**
-- Run `npm install` to install all dependencies
-- Delete `node_modules` and `package-lock.json`, then run `npm install` again
+**LINE Bot not receiving messages**
+Confirm `LINE_CHANNEL_SECRET` and `LINE_CHANNEL_ACCESS_TOKEN` are set in `backend/.env` and that the webhook URL is registered in the LINE Developer Console.
 
-### News Crawler Not Working
+## Roadmap
 
-- Check browser console and backend logs
-- Ensure `NEWS_CRON_SCHEDULE` is a valid cron expression
-- Verify Google News URL is accessible from your network
-
-## Development Notes
-
-### Fixed Issues (May 4, 2026)
-
-1. **Missing Dependencies** - Added 7 required packages
-2. **Invalid Tavily Package** - Fixed `@tavily/core` → `tavily` in package.json
-3. **Syntax Errors** - Removed problematic Unicode characters in comments
-4. **Missing googleNews.js** - Created RSS parser for Google News integration
-5. **Tavily Integration** - Temporarily commented out due to API compatibility
-
-### Key Features
-
-- ✅ Real-time news crawling from Google News RSS feeds
-- ✅ Sentiment analysis using GROQ LLM
-- ✅ Article summarization with adjustable length
-- ✅ MongoDB persistence with duplicate detection
-- ✅ JWT authentication
-- ✅ CORS-enabled for frontend integration
-- ✅ Scheduled auto-crawling via node-cron
+- [ ] Dcard crawler
+- [ ] YouTube API data collection
+- [ ] Daily report schedule (currently weekly only)
+- [ ] Alert / notification system (LINE push on sentiment spikes)
