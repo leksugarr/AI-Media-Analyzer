@@ -3,35 +3,42 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 
-// ── Color mapping: sentiment label + intensity → Tailwind bg class ────────────
+// ── Color mapping: intensity (-1 to +1) → Tailwind bg class ──────────────────
 function cellColor(cell) {
   if (!cell) return "bg-white/5";
-  const { label, avg } = cell;
-  const intensity = Math.min(avg, 1);
-  if (label === "POSITIVE") {
-    if (intensity >= 0.75) return "bg-green-500/70";
-    if (intensity >= 0.5)  return "bg-green-500/45";
-    return "bg-green-500/20";
-  }
-  if (label === "NEGATIVE") {
-    if (intensity >= 0.75) return "bg-red-500/70";
-    if (intensity >= 0.5)  return "bg-red-500/45";
-    return "bg-red-500/20";
-  }
-  // NEUTRAL
-  if (intensity >= 0.6) return "bg-yellow-500/40";
-  return "bg-yellow-500/15";
+  const v = cell.intensity; // -1 to +1
+  if (v > 0.5)  return "bg-green-500/80";
+  if (v > 0.1)  return "bg-green-500/35";
+  if (v < -0.5) return "bg-red-500/80";
+  if (v < -0.1) return "bg-red-500/35";
+  return "bg-yellow-500/30"; // neutral band (-0.1 to 0.1)
 }
 
+// ── Cell text: 0-10 scale (5 = neutral), "Neutral" for the middle band ───────
+function toScore(intensity) {
+  return Math.round((intensity + 1) / 2 * 10);
+}
 function cellText(cell) {
   if (!cell) return "";
-  return `${cell.label[0]}${cell.count}`;  // e.g. "P4", "N2"
+  const v = cell.intensity;
+  if (v >= -0.1 && v <= 0.1) return "Neutral";
+  return String(toScore(v));
 }
 
-// ── Shorten ISO week label for display ────────────────────────────────────────
+// ── ISO week string → "Apr 14–20" date range ─────────────────────────────────
 function shortWeek(w) {
-  // "2025-W03" → "W03"
-  return w.split("-")[1];
+  // "2025-W03" → Monday of that week → "Jan 13–19"
+  const [yearStr, weekStr] = w.split("-W");
+  const year = parseInt(yearStr, 10);
+  const week = parseInt(weekStr, 10);
+  // ISO week 1 = week containing first Thursday of year
+  const jan4 = new Date(year, 0, 4);
+  const monday = new Date(jan4);
+  monday.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7) + (week - 1) * 7);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${fmt(monday)}–${sunday.getDate()}`;
 }
 
 export default function KeywordHeatmap() {
@@ -40,7 +47,7 @@ export default function KeywordHeatmap() {
 
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tooltip, setTooltip] = useState(null); // { keyword, week, cell }
+  const [tooltip, setTooltip] = useState(null); // { keyword, week, cell, x, y }
 
   useEffect(() => {
     fetch("/api/heatmap")
@@ -95,11 +102,11 @@ export default function KeywordHeatmap() {
 
       {/* Grid */}
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse" style={{ minWidth: `${keywords.length * 44 + 100}px` }}>
+        <table className="w-full border-collapse" style={{ minWidth: `${keywords.length * 44 + 120}px` }}>
           <thead>
             <tr>
               {/* Empty corner */}
-              <th className="w-24" />
+              <th className="w-28" />
               {keywords.map((kw) => (
                 <th
                   key={kw}
@@ -115,7 +122,7 @@ export default function KeywordHeatmap() {
             {weeks.map((week, wi) => (
               <tr key={week}>
                 {/* Week label */}
-                <td className="text-[10px] text-gray-600 pr-2 py-0.5 text-right whitespace-nowrap">
+                <td className="text-[10px] text-gray-600 pr-2 py-0.5 text-right whitespace-nowrap w-28">
                   {shortWeek(week)}
                 </td>
                 {keywords.map((kw) => {
@@ -127,7 +134,8 @@ export default function KeywordHeatmap() {
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ delay: (wi * keywords.length) * 0.002, duration: 0.2 }}
-                        onMouseEnter={() => setTooltip({ keyword: kw, week, cell })}
+                        onMouseEnter={(e) => setTooltip({ keyword: kw, week, cell, x: e.clientX, y: e.clientY })}
+                        onMouseMove={(e) => setTooltip((prev) => prev ? { ...prev, x: e.clientX, y: e.clientY } : prev)}
                         onMouseLeave={() => setTooltip(null)}
                         className={`
                           w-9 h-7 rounded flex items-center justify-center
@@ -147,12 +155,17 @@ export default function KeywordHeatmap() {
         </table>
       </div>
 
-      {/* Tooltip */}
+      {/* Tooltip — fixed position next to cursor */}
       {tooltip && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-10
-          bg-gray-900 border border-white/10 rounded-xl px-3 py-2 text-xs shadow-xl pointer-events-none">
+        <div
+          className="fixed z-50 bg-gray-900 border border-white/10 rounded-xl px-3 py-2 text-xs shadow-xl pointer-events-none"
+          style={{
+            left: Math.min(tooltip.x + 14, window.innerWidth - 180),
+            top:  Math.max(8, Math.min(tooltip.y - 10, window.innerHeight - 140)),
+          }}
+        >
           <p className="text-white font-medium">{tooltip.keyword}</p>
-          <p className="text-gray-400">{tooltip.week}</p>
+          <p className="text-gray-400">{shortWeek(tooltip.week)}</p>
           {tooltip.cell ? (
             <>
               <p className="text-gray-300 mt-1">
@@ -166,7 +179,9 @@ export default function KeywordHeatmap() {
                     : tFilter("neutral")}
                 </span>
               </p>
-              <p className="text-gray-400">{t("tooltipScore")}: {tooltip.cell.avg}</p>
+              <p className="text-gray-400">
+                {t("tooltipScore")}: {toScore(tooltip.cell.intensity)}/10
+              </p>
               <p className="text-gray-400">{t("tooltipArticles")}: {tooltip.cell.count}</p>
             </>
           ) : (

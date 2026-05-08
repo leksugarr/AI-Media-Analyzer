@@ -88,6 +88,7 @@ function DashboardPageInner() {
   const [reportMsg, setReportMsg]   = useState("");
   const [genReport, setGenReport]   = useState(false);
   const [showReports, setShowReports] = useState(true);
+  const [showAllReports, setShowAllReports] = useState(false);
 
   // ── Semantic search state ─────────────────────────────────────────────────
   const [searchMode, setSearchMode]       = useState("keyword"); // "keyword" | "semantic"
@@ -111,8 +112,8 @@ function DashboardPageInner() {
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (user) { fetchArticles(page, filters); fetchStatus(); fetchReports(); fetchOverallSentiment(); }
-  }, [user, page, filterAnalyzed]);
+    if (!authLoading && user) { fetchArticles(page, filters); fetchStatus(); fetchReports(); fetchOverallSentiment(); }
+  }, [authLoading, user, page, filterAnalyzed]);
 
   // ── Fetch unfiltered sentiment counts for the chart ───────────────────────
   const fetchOverallSentiment = async () => {
@@ -222,32 +223,128 @@ function DashboardPageInner() {
     const win = window.open("", "_blank");
     const from = new Date(r.period?.from).toLocaleDateString();
     const to   = new Date(r.period?.to).toLocaleDateString();
-    const articles = (r.topArticles || []).map(a =>
-      `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px">${a.title || ""}</td>
-       <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;color:${
-         a.sentiment === "POSITIVE" ? "green" : a.sentiment === "NEGATIVE" ? "red" : "#b45"
-       }">${a.sentiment || ""}</td></tr>`
-    ).join("");
-    win.document.write(`<!DOCTYPE html><html><head><title>Report</title>
-      <style>body{font-family:sans-serif;padding:40px;color:#111}h1{font-size:22px;margin-bottom:4px}
-      .sub{color:#888;font-size:13px;margin-bottom:24px}.stats{display:flex;gap:16px;margin-bottom:24px}
-      .stat{background:#f5f5f5;border-radius:8px;padding:12px 20px;text-align:center}
-      .stat-val{font-size:24px;font-weight:700}.stat-label{font-size:11px;color:#888}
-      .narrative{background:#f9f9f9;border-left:3px solid #4f46e5;padding:12px 16px;font-size:13px;line-height:1.7;margin-bottom:24px}
-      table{width:100%;border-collapse:collapse}th{text-align:left;font-size:11px;color:#888;padding:6px 8px;border-bottom:2px solid #eee}
-      </style></head><body>
-      <h1>Sentiment Report · ${r.type?.toUpperCase()}</h1>
-      <p class="sub">${from} – ${to} · Generated ${new Date(r.createdAt).toLocaleString()}</p>
-      <div class="stats">
-        <div class="stat"><div class="stat-val">${r.stats?.total ?? 0}</div><div class="stat-label">Total</div></div>
-        <div class="stat"><div class="stat-val" style="color:green">${r.stats?.positive ?? 0}</div><div class="stat-label">Positive</div></div>
-        <div class="stat"><div class="stat-val" style="color:red">${r.stats?.negative ?? 0}</div><div class="stat-label">Negative</div></div>
-        <div class="stat"><div class="stat-val" style="color:#b45">${r.stats?.neutral ?? 0}</div><div class="stat-label">Neutral</div></div>
+    const total = r.stats?.total || 1;
+    const pos   = r.stats?.positive ?? 0;
+    const neg   = r.stats?.negative ?? 0;
+    const neu   = r.stats?.neutral  ?? 0;
+    const pPos  = Math.round((pos / total) * 100);
+    const pNeg  = Math.round((neg / total) * 100);
+    const pNeu  = Math.max(0, 100 - pPos - pNeg);
+    // 0–10 sentiment score
+    const score = Math.round(((pos - neg) / total) * 5 + 5);
+    const scoreColor = score >= 7 ? "#16a34a" : score <= 3 ? "#dc2626" : "#b45309";
+
+    // SVG donut chart
+    const cx = 80, cy = 80, r2 = 60, stroke = 36;
+    const circ = 2 * Math.PI * r2;
+    const posD  = (pPos / 100) * circ;
+    const neuD  = (pNeu / 100) * circ;
+    const negD  = (pNeg / 100) * circ;
+    const posOff = 0;
+    const neuOff = circ - posD;
+    const negOff = circ - posD - neuD;
+    const donut = `
+      <svg width="160" height="160" viewBox="0 0 160 160">
+        <circle cx="${cx}" cy="${cy}" r="${r2}" fill="none" stroke="#f3f4f6" stroke-width="${stroke}"/>
+        <circle cx="${cx}" cy="${cy}" r="${r2}" fill="none" stroke="#16a34a" stroke-width="${stroke}"
+          stroke-dasharray="${posD} ${circ - posD}" stroke-dashoffset="${circ - posOff}"
+          transform="rotate(-90 ${cx} ${cy})"/>
+        <circle cx="${cx}" cy="${cy}" r="${r2}" fill="none" stroke="#d97706" stroke-width="${stroke}"
+          stroke-dasharray="${neuD} ${circ - neuD}" stroke-dashoffset="${circ - neuOff}"
+          transform="rotate(-90 ${cx} ${cy})"/>
+        <circle cx="${cx}" cy="${cy}" r="${r2}" fill="none" stroke="#dc2626" stroke-width="${stroke}"
+          stroke-dasharray="${negD} ${circ - negD}" stroke-dashoffset="${circ - negOff}"
+          transform="rotate(-90 ${cx} ${cy})"/>
+        <text x="${cx}" y="${cy - 8}" text-anchor="middle" font-size="22" font-weight="700" fill="${scoreColor}">${score}</text>
+        <text x="${cx}" y="${cy + 10}" text-anchor="middle" font-size="11" fill="#6b7280">/10</text>
+        <text x="${cx}" y="${cy + 26}" text-anchor="middle" font-size="9" fill="#9ca3af">sentiment score</text>
+      </svg>`;
+
+    const articleRows = (r.topArticles || []).map((a, i) => {
+      const sColor = a.sentiment === "POSITIVE" ? "#16a34a" : a.sentiment === "NEGATIVE" ? "#dc2626" : "#b45309";
+      const sBg    = a.sentiment === "POSITIVE" ? "#f0fdf4" : a.sentiment === "NEGATIVE" ? "#fef2f2" : "#fffbeb";
+      return `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"}">
+        <td style="padding:10px 12px;font-size:12px;color:#111;border-bottom:1px solid #f3f4f6;line-height:1.5">${a.title || "—"}</td>
+        <td style="padding:10px 12px;font-size:11px;font-weight:600;color:${sColor};background:${sBg};border-bottom:1px solid #f3f4f6;white-space:nowrap;text-align:center;border-radius:4px">${a.sentiment || "—"}</td>
+      </tr>`;
+    }).join("");
+
+    const typeLabel = r.type === "weekly" ? "Weekly Report" : r.type === "daily" ? "Daily Report" : "Manual Report";
+
+    win.document.write(`<!DOCTYPE html><html><head><title>Sentiment Report</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;color:#111;padding:0}
+      .page{max-width:800px;margin:0 auto;padding:48px 40px;background:#fff;min-height:100vh}
+      .header{border-bottom:2px solid #f1f5f9;padding-bottom:20px;margin-bottom:28px}
+      .report-type{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#6366f1;background:#eef2ff;padding:3px 10px;border-radius:20px;margin-bottom:10px}
+      h1{font-size:26px;font-weight:700;color:#0f172a;letter-spacing:-.02em;margin-bottom:6px}
+      .meta{font-size:12px;color:#94a3b8}
+      .body{display:flex;gap:32px;margin-bottom:32px;align-items:flex-start}
+      .chart-col{flex-shrink:0}
+      .legend{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+      .legend-item{display:flex;align-items:center;gap:8px;font-size:12px;color:#374151}
+      .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+      .stats-col{flex:1}
+      .stat-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+      .stat-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px}
+      .stat-val{font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1}
+      .stat-label{font-size:11px;color:#94a3b8;margin-top:4px;text-transform:uppercase;letter-spacing:.05em}
+      .score-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px}
+      .score-val{font-size:32px;font-weight:700}
+      .score-desc{font-size:12px;color:#64748b;line-height:1.5}
+      .narrative{background:#f8fafc;border-left:3px solid #6366f1;border-radius:0 8px 8px 0;padding:16px 20px;font-size:13px;line-height:1.8;color:#374151;margin-bottom:32px}
+      .section-title{font-size:13px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+      table{width:100%;border-collapse:collapse;border-radius:10px;overflow:hidden;border:1px solid #f1f5f9}
+      th{text-align:left;font-size:11px;color:#94a3b8;font-weight:600;padding:10px 12px;background:#f8fafc;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e2e8f0}
+      .footer{margin-top:40px;padding-top:16px;border-top:1px solid #f1f5f9;font-size:11px;color:#cbd5e1;text-align:center}
+      @media print{body{background:#fff}.page{padding:32px 28px;box-shadow:none}}
+    </style></head><body>
+    <div class="page">
+      <div class="header">
+        <div class="report-type">${typeLabel}</div>
+        <h1>Sentiment Report</h1>
+        <p class="meta">${from} – ${to} &nbsp;·&nbsp; Generated ${new Date(r.createdAt).toLocaleString()}</p>
       </div>
-      ${r.narrative ? `<div class="narrative">${r.narrative}</div>` : ""}
-      ${articles ? `<table><thead><tr><th>Article</th><th>Sentiment</th></tr></thead><tbody>${articles}</tbody></table>` : ""}
-      <script>window.onload=()=>window.print()</script>
-      </body></html>`);
+
+      <div class="body">
+        <div class="chart-col">
+          ${donut}
+          <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div> Positive &nbsp;<strong>${pPos}%</strong></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#d97706"></div> Neutral &nbsp;<strong>${pNeu}%</strong></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div> Negative &nbsp;<strong>${pNeg}%</strong></div>
+          </div>
+        </div>
+        <div class="stats-col">
+          <div class="stat-cards">
+            <div class="stat-card"><div class="stat-val" style="color:#0f172a">${total.toLocaleString()}</div><div class="stat-label">Total Articles</div></div>
+            <div class="stat-card"><div class="stat-val" style="color:#16a34a">${pos}</div><div class="stat-label">Positive</div></div>
+            <div class="stat-card"><div class="stat-val" style="color:#dc2626">${neg}</div><div class="stat-label">Negative</div></div>
+            <div class="stat-card"><div class="stat-val" style="color:#b45309">${neu}</div><div class="stat-label">Neutral</div></div>
+          </div>
+          <div class="score-card">
+            <div class="score-val" style="color:${scoreColor}">${score}/10</div>
+            <div class="score-desc"><strong>Sentiment Score</strong><br>10 = very positive &nbsp;·&nbsp; 5 = neutral &nbsp;·&nbsp; 0 = very negative</div>
+          </div>
+        </div>
+      </div>
+
+      ${r.narrative ? `
+      <p class="section-title">AI Analysis</p>
+      <div class="narrative">${r.narrative}</div>` : ""}
+
+      ${r.topArticles?.length ? `
+      <p class="section-title">Top Articles</p>
+      <table>
+        <thead><tr><th>Article</th><th style="width:110px;text-align:center">Sentiment</th></tr></thead>
+        <tbody>${articleRows}</tbody>
+      </table>` : ""}
+
+      <div class="footer">AI Opinion Analysis System &nbsp;·&nbsp; Generated ${new Date().toLocaleString()}</div>
+    </div>
+    <script>window.onload=()=>window.print()</script>
+    </body></html>`);
     win.document.close();
   };
 
@@ -366,25 +463,24 @@ function DashboardPageInner() {
             </div>
           )}
 
-          {/* Status cards */}
-          {status && (
+  {/* Status cards */}
             <div className="grid grid-cols-3 gap-4">
               {[
-                { label: t("totalArticles"), value: status.total },
-                { label: t("analyzed"),      value: status.analyzed,   color: "text-green-400" },
-                { label: t("pending"),       value: status.unanalyzed, color: "text-yellow-400" },
+                { label: t("totalArticles"), value: status?.total,        color: "text-white" },
+                { label: t("analyzed"),      value: status?.analyzed,     color: "text-green-400" },
+                { label: t("pending"),       value: status?.unanalyzed,   color: "text-yellow-400" },
               ].map((s, i) => (
                 <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
                   <ArticleCard className="p-4 text-center">
-                    <p className={`text-2xl font-bold ${s.color || "text-white"}`}>{s.value ?? "—"}</p>
+                    <p className={`text-2xl font-bold ${s.color}`}>
+                      {s.value ?? "—"}
+                    </p>
                     <p className="text-xs text-gray-500 mt-1">{s.label}</p>
                   </ArticleCard>
                 </motion.div>
               ))}
             </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
             {/* Keyword frequency */}
             <ArticleCard className="flex flex-col gap-3">
@@ -402,43 +498,86 @@ function DashboardPageInner() {
               )}
             </ArticleCard>
 
-            {/* Sentiment breakdown */}
-            <ArticleCard className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-500 uppercase tracking-wider">{t("sentimentBreakdown")}</p>
-                <span className="text-[10px] text-gray-600 italic">{t("overallCorpus")}</span>
-              </div>
-              {loading ? (
-                <p className="text-gray-600 text-sm text-center py-8">{t("loading")}</p>
-              ) : (
-                <div className="flex flex-col gap-3 mt-2">
-                  {Object.entries(overallSentiment).map(([label, count], i) => {
-                    const total = Object.values(overallSentiment).reduce((a, b) => a + b, 0);
-                    const pct = Math.round((count / total) * 100);
-                    const color = label === "POSITIVE" ? "bg-green-500/60" : label === "NEGATIVE" ? "bg-red-500/60" : "bg-yellow-500/60";
-                    return (
-                      <motion.div key={label} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.1 }} className="flex flex-col gap-1">
-                        <div className="flex justify-between text-xs">
-                          <SentimentBadge label={label} />
-                          <span className="text-gray-400">{count} articles ({pct}%)</span>
-                        </div>
-                        <div className="w-full bg-white/5 rounded-full h-2">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${pct}%` }}
-                            transition={{ delay: i * 0.1 + 0.3, duration: 0.6, ease: "easeOut" }}
-                            className={`h-2 rounded-full ${color}`}
-                          />
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                  {Object.keys(overallSentiment).length === 0 && (
-                    <p className="text-gray-600 text-sm text-center py-8">{t("noAnalyzed")}</p>
-                  )}
+{/* Sentiment breakdown */}
+<ArticleCard className="flex flex-col gap-3">
+  <div className="flex items-center justify-between">
+    <p className="text-xs text-gray-500 uppercase tracking-wider">{t("sentimentBreakdown")}</p>
+    <span className="text-[10px] text-gray-600 italic">{t("overallCorpus")}</span>
+  </div>
+  {loading ? (
+    <p className="text-gray-600 text-sm text-center py-8">{t("loading")}</p>
+  ) : Object.keys(overallSentiment).length === 0 ? (
+    <p className="text-gray-600 text-sm text-center py-8">{t("noAnalyzed")}</p>
+  ) : (
+    (() => {
+      const total = Object.values(overallSentiment).reduce((a, b) => a + b, 0);
+      const COLORS = { POSITIVE: "#4ade80", NEGATIVE: "#f87171", NEUTRAL: "#facc15" };
+      const entries = Object.entries(overallSentiment);
+      const radius = 54;
+      const circumference = 2 * Math.PI * radius;
+      let offset = 0;
+
+      const slices = entries.map(([label, count]) => {
+        const pct = count / total;
+        const dash = pct * circumference;
+        const slice = { label, count, pct, dash, offset, color: COLORS[label] || "#4a5a7a" };
+        offset += dash;
+        return slice;
+      });
+
+      return (
+        <div className="flex items-center gap-6 mt-2">
+          {/* Donut */}
+          <div className="relative flex-shrink-0">
+            <svg width="130" height="130" viewBox="0 0 130 130">
+              <circle cx="65" cy="65" r={radius} fill="none" stroke="#1e2130" strokeWidth="18" />
+              {slices.map((s, i) => (
+                <circle
+                  key={s.label}
+                  cx="65" cy="65" r={radius}
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth="18"
+                  strokeDasharray={`${s.dash} ${circumference - s.dash}`}
+                  strokeDashoffset={-s.offset + circumference * 0.25}
+                  style={{ transition: "stroke-dasharray 0.6s ease" }}
+                />
+              ))}
+            </svg>
+            {/* Center label */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-lg font-bold text-white">{total}</span>
+              <span className="text-[10px] text-gray-500">{t("analyzed")}</span>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex flex-col gap-3 flex-1">
+            {slices.map((s) => (
+              <motion.div
+                key={s.label}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex items-center justify-between gap-2"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                  <span className="text-xs text-gray-300">
+                    {s.label === "POSITIVE" ? t("positive") : s.label === "NEGATIVE" ? t("negative") : t("neutral")}
+                  </span>
                 </div>
-              )}
-            </ArticleCard>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">{s.count}</span>
+                  <span className="text-[10px] text-gray-600 w-8 text-right">{Math.round(s.pct * 100)}%</span>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      );
+    })()
+  )}
+</ArticleCard>
           </div>
 
           {/* Keyword Watchlist */}
@@ -495,7 +634,7 @@ function DashboardPageInner() {
                   <p className="text-gray-600 text-sm text-center py-6">{t("noReports")}</p>
                 ) : (
                   <div className="flex flex-col gap-3">
-                    {reports.map((r, i) => (
+                    {(showAllReports ? reports : reports.slice(0, 2)).map((r, i) => (
                       <motion.div
                         key={r._id}
                         initial={{ opacity: 0, y: 6 }}
@@ -514,12 +653,6 @@ function DashboardPageInner() {
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] text-gray-600">{new Date(r.createdAt).toLocaleString()}</span>
-                            <button
-                              onClick={() => exportReportCSV(r)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600/20 hover:bg-green-600/35 border border-green-500/30 text-green-400 text-xs font-medium transition"
-                            >
-                              ⬇ CSV
-                            </button>
                             <button
                               onClick={() => exportReportPDF(r)}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/30 text-indigo-400 text-xs font-medium transition"
@@ -565,6 +698,15 @@ function DashboardPageInner() {
                         )}
                       </motion.div>
                     ))}
+
+                    {reports.length > 2 && (
+                      <button
+                        onClick={() => setShowAllReports(v => !v)}
+                        className="text-xs text-gray-500 hover:text-gray-300 transition py-1 text-center"
+                      >
+                        {showAllReports ? "▲ View Less" : `▼ View More (${reports.length - 2} more)`}
+                      </button>
+                    )}
                   </div>
                 )}
               </>

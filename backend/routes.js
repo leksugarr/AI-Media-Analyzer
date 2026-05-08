@@ -63,6 +63,26 @@ router.post("/stance/run", async (req, res) => {
   }
 });
 
+router.get("/stance/by-keyword", sanitizeKeyword, async (req, res) => {
+  const { keyword } = req.query;
+  if (!keyword) return res.status(400).json({ error: "keyword required" });
+  try {
+    const distribution = await Article.aggregate([
+      { $match: { analyzed: true, "stance.label": { $ne: null }, keywords: keyword } },
+      { $group: { _id: "$stance.label", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+    ]);
+    const total = distribution.reduce((s, d) => s + d.count, 0);
+    res.json({
+      keyword,
+      total,
+      distribution: distribution.map(d => ({ label: d._id, count: d.count })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch stance by keyword" });
+  }
+});
+
 
 /* ─── Auth Helper ──────────────────────────────────────────────────────────── */
 function getUserFromToken(req) {
@@ -803,21 +823,16 @@ router.get("/heatmap", async (req, res) => {
     }
 
     // ── 5. Build cells map ────────────────────────────────────────────────────
-    const cells = {};
+const cells = {};
     for (const row of rows) {
       const weekLabel = `${row._id.year}-W${String(row._id.week).padStart(2, "0")}`;
       if (!weeks.includes(weekLabel)) continue;
       const key = `${row._id.keyword}::${weekLabel}`;
-      const label = row.posCount >= row.negCount
-        ? (row.posCount > 0 ? "POSITIVE" : "NEUTRAL")
-        : "NEGATIVE";
-      cells[key] = {
-        avg:   Math.round(row.avgScore * 100) / 100,
-        label,
-        count: row.count,
-      };
+      const total = row.count;
+      const intensity = Math.round(((row.posCount - row.negCount) / total) * 100) / 100;
+      const label = intensity > 0.1 ? "POSITIVE" : intensity < -0.1 ? "NEGATIVE" : "NEUTRAL";
+      cells[key] = { intensity, label, count: total };
     }
-
     res.json({ weeks, keywords, cells });
   } catch (err) {
     console.error("Heatmap error:", err.message);
@@ -1185,6 +1200,8 @@ router.post("/topics/run", async (req, res) => {
 router.get("/trends", async (req, res) => {
   const days    = Math.min(Number(req.query.days) || 30, 90);
   const keyword = req.query.keyword?.trim() || null;
+  const locale  = req.query.locale || "zh";
+  const lang    = locale === "en" ? "English" : "繁體中文";
   const since   = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   try {
@@ -1249,8 +1266,8 @@ const completion = await groqWithRetry(() => groq.chat.completions.create({
 
 Reply ONLY with JSON (no markdown):
 {
-  "trend": "2-sentence analysis in 繁體中文",
-  "forecast": "2-sentence 7-day prediction in 繁體中文",
+  "trend": "2-sentence analysis in ${lang}",
+  "forecast": "2-sentence 7-day prediction in ${lang}",
   "direction": "rising"|"stable"|"declining",
   "riskSignal": "low"|"medium"|"high",
   "forecastPoints": [

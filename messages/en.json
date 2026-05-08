@@ -13,7 +13,8 @@
     "password": "Password",
     "submit": "Sign In",
     "noAccount": "Don't have an account?",
-    "signup": "Sign up"
+    "signup": "Sign up",
+    "loading": "Signing in..."
   },
   "signup": {
     "title": "Create an account",
@@ -64,9 +65,9 @@
     "negative": "Negative",
     "neutral": "Neutral",
     "credibility": "Credibility",
-    "credible": "✅ Credible",
-    "suspicious": "⚠️ Suspicious",
-    "likelyFake": "🚨 Likely Fake",
+    "credible": "Credible",
+    "suspicious": "Suspicious",
+    "likelyFake": "Likely Fake",
     "dateRange": "Date Range",
     "from": "From",
     "to": "To",
@@ -112,13 +113,13 @@
   "weeklyReports": "Weekly Reports",
   "hide": "Hide ▲",
   "show": "Show ▼",
-  "generateNow": "⚡ Generate Now",
+  "generateNow": "Generate Now",
   "generating": "Generating...",
   "noReports": "No reports yet — generate one or wait for Monday 8am",
   "topArticles": "Top Articles",
   "articles": "Articles",
   "keyword": "Keyword",
-  "semantic": "🧠 Semantic",
+  "semantic": "Semantic",
   "all": "All",
   "analyzedFilter": "Analyzed",
   "pendingFilter": "Pending",
@@ -137,7 +138,7 @@
   "noSimilar": "No similar articles found — embed more articles first",
   "prev": "← Prev",
   "next": "Next →",
-  "serverError": "⚠️ Could not reach the server. Make sure the backend is running.",
+  "serverError": "Could not reach the server. Make sure the backend is running.",
   "positive": "Positive",
   "negative": "Negative",
   "neutral": "Neutral"
@@ -163,7 +164,19 @@
   "lastDays": "Last {days} days",
   "positive": "Positive",
   "neutral": "Neutral",
-  "negative": "Negative"
+  "negative": "Negative",
+  "labels": {
+    "科技產業": "Tech Industry",
+    "政治選舉": "Politics & Elections",
+    "經濟金融": "Economy & Finance",
+    "國際關係": "International Relations",
+    "社會民生": "Society & Livelihood",
+    "環境氣候": "Environment & Climate",
+    "健康醫療": "Health & Medicine",
+    "娛樂文化": "Entertainment & Culture",
+    "軍事安全": "Military & Security",
+    "教育學術": "Education & Academia"
+  }
 },
 "heatmap": {
   "title": "Sentiment Heatmap",
@@ -179,7 +192,7 @@
 "watchlist": {
   "title": "Keyword Watchlist",
   "subtitle": "Keywords the crawler monitors each cycle",
-  "suggestBtn": "🤖 Suggest Keywords",
+  "suggestBtn": "Suggest Keywords",
   "running": "Running...",
   "tabActive": "Active",
   "tabPending": "Pending",
@@ -192,7 +205,7 @@
   "enable": "Enable",
   "remove": "Remove",
   "noSuggestions": "No pending suggestions",
-  "noSuggestionsHint": "Click \"🤖 Suggest Keywords\" to run Groq analysis",
+  "noSuggestionsHint": "Click \"Suggest Keywords\" to run Groq analysis",
   "approve": "✓ Add",
   "suggestedAt": "Suggested",
   "addedSuccess": "added",
@@ -204,8 +217,8 @@
   "approveFailed": "Failed to approve",
   "rejectedSuccess": "rejected",
   "rejectFailed": "Failed to reject",
-  "suggestRunning": "🤖 Groq is analyzing articles...",
-  "suggestDone": "✅ Suggestion run complete — check pending tab",
+  "suggestRunning": "Groq is analyzing articles...",
+  "suggestDone": "Suggestion run complete — check pending tab",
   "suggestFailed": "Failed to run suggestions"
 },
 "trend": {
@@ -228,7 +241,8 @@
   "forecastTitle": "7-Day Forecast",
   "projected": "Projected next 7 days",
   "aiUnavailable": "AI analysis unavailable — check Groq API",
-  "articles": "articles"
+  "articles": "articles",
+  "sentimentOverTime": "Sentiment trends — last {days} days"
 }
   
 }

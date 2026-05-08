@@ -3,7 +3,11 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslations, useLocale } from "next-intl";
 
-const LOCALES = ["zh-TW", "zh-CN", "en-US", "ja-JP"];
+const LOCALES = [
+  { value: "zh-TW", label: "Traditional Chinese (Taiwan)" },
+  { value: "zh-CN", label: "Simplified Chinese (China)" },
+  { value: "en-US", label: "English (US)" },
+];
 
 export default function KeywordWatchlistPanel() {
   const t = useTranslations("watchlist");
@@ -154,29 +158,34 @@ export default function KeywordWatchlistPanel() {
         <div className="flex flex-col gap-3">
 
           {/* Add keyword form */}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder={t("addPlaceholder")}
-              value={newKeyword}
-              onChange={e => setNewKeyword(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleAdd()}
-              className="flex-1 text-xs bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-gray-200 placeholder-gray-600 outline-none focus:border-white/20 transition"
-            />
-            <select
-              value={newLocale}
-              onChange={e => setNewLocale(e.target.value)}
-              className="text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-gray-300 outline-none"
-            >
-              {LOCALES.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
-            <button
-              onClick={handleAdd}
-              disabled={adding || !newKeyword.trim()}
-              className="px-3 py-2 bg-blue-600/40 hover:bg-blue-600/60 border border-blue-500/30 rounded-lg text-xs font-medium transition disabled:opacity-40"
-            >
-              {t("addBtn")}
-            </button>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder={t("addPlaceholder")}
+                value={newKeyword}
+                onChange={e => setNewKeyword(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleAdd()}
+                className="flex-1 text-xs bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-gray-200 placeholder-gray-600 outline-none focus:border-white/20 transition"
+              />
+              <select
+                value={newLocale}
+                onChange={e => setNewLocale(e.target.value)}
+                className="text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-gray-300 outline-none"
+              >
+                {LOCALES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+              </select>
+              <button
+                onClick={handleAdd}
+                disabled={adding || !newKeyword.trim()}
+                className="px-3 py-2 bg-blue-600/40 hover:bg-blue-600/60 border border-blue-500/30 rounded-lg text-xs font-medium transition disabled:opacity-40"
+              >
+                {t("addBtn")}
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-600 px-1">
+              Language tells the crawler which region's news sources to search for this keyword.
+            </p>
           </div>
 
           {/* Keyword list */}
@@ -199,7 +208,9 @@ export default function KeywordWatchlistPanel() {
                       {/* Active dot */}
                       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${kw.active ? "bg-green-400" : "bg-gray-600"}`} />
                       <span className="text-sm text-gray-200 truncate">{kw.keyword}</span>
-                      <span className="text-[10px] text-gray-600 bg-white/5 px-1.5 py-0.5 rounded">{kw.locale}</span>
+                      <span className="text-[10px] text-gray-600 bg-white/5 px-1.5 py-0.5 rounded">
+                        {LOCALES.find(l => l.value === kw.locale)?.label.split(" (")[0] ?? kw.locale}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
                       <button
