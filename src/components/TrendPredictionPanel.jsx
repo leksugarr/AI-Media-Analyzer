@@ -9,90 +9,149 @@ const RISK_COLOR = {
   high:   "text-red-400 border-red-500/30 bg-red-500/10",
 };
 
-const DIR_ICON = { rising: "↗", stable: "→", declining: "↘" };
+const DIR_ICON  = { rising: "↗", stable: "→", declining: "↘" };
 const DIR_COLOR = { rising: "text-green-400", stable: "text-yellow-400", declining: "text-red-400" };
-const SENT_COLOR = { POSITIVE: "bg-green-500/50", NEGATIVE: "bg-red-500/50", NEUTRAL: "bg-yellow-500/50" };
 
-// ── Tiny inline bar chart ──────────────────────────────────────────────────────
-function MiniBarChart({ series, t }) {
+// ── SVG Line Chart (positive vs negative over time) ───────────────────────────
+function SentimentLineChart({ series, labelPositive, labelNegative }) {
   if (!series?.length) return null;
-  const max = Math.max(...series.map(s => s.count), 1);
+
+  const W = 600, H = 110, PAD = { top: 10, right: 10, bottom: 24, left: 28 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+
+  const maxVal = Math.max(...series.flatMap(s => [s.positive, s.negative]), 1);
+  const xStep  = innerW / Math.max(series.length - 1, 1);
+
+  const toX = i => PAD.left + i * xStep;
+  const toY = v => PAD.top + innerH - (v / maxVal) * innerH;
+
+  const polyline = (key, color, fill) => {
+    const pts = series.map((s, i) => `${toX(i)},${toY(s[key])}`).join(" ");
+    const areaClose = `${toX(series.length - 1)},${PAD.top + innerH} ${toX(0)},${PAD.top + innerH}`;
+    return (
+      <g key={key}>
+        <polygon points={`${pts} ${areaClose}`} fill={fill} />
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+        {series.map((s, i) => (
+          <circle key={i} cx={toX(i)} cy={toY(s[key])} r="2.5" fill={color} />
+        ))}
+      </g>
+    );
+  };
+
+  const labelIdxs = [0, Math.floor(series.length / 2), series.length - 1].filter(
+    (v, i, a) => a.indexOf(v) === i && v < series.length
+  );
+
   return (
-    <div className="flex items-end gap-[2px] h-16 w-full">
-      {series.map((s, i) => {
-        const pct = Math.round((s.count / max) * 100);
-        const color =
-          s.positive > s.negative ? "bg-green-500/50" :
-          s.negative > s.positive ? "bg-red-500/50"   : "bg-yellow-500/50";
+    <div className="w-full overflow-x-auto">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 280 }}>
+        {[0, 0.5, 1].map(f => (
+          <line
+            key={f}
+            x1={PAD.left} y1={PAD.top + innerH * (1 - f)}
+            x2={PAD.left + innerW} y2={PAD.top + innerH * (1 - f)}
+            stroke="#ffffff10" strokeWidth="1"
+          />
+        ))}
+        {polyline("positive", "#4ade80", "#4ade8015")}
+        {polyline("negative", "#f87171", "#f8717115")}
+        {labelIdxs.map(i => (
+          <text key={i} x={toX(i)} y={H - 4} textAnchor="middle" fontSize="8" fill="#4a5a7a">
+            {series[i].date?.slice(5)}
+          </text>
+        ))}
+        {[0, maxVal].map((v, i) => (
+          <text
+            key={i}
+            x={PAD.left - 4}
+            y={i === 0 ? PAD.top + innerH : PAD.top + 6}
+            textAnchor="end" fontSize="8" fill="#4a5a7a"
+          >
+            {v}
+          </text>
+        ))}
+      </svg>
+      <div className="flex items-center gap-4 mt-1 px-1">
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-0.5 bg-green-400 rounded-full inline-block" />
+          <span className="text-[10px] text-gray-500">{labelPositive}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-0.5 bg-red-400 rounded-full inline-block" />
+          <span className="text-[10px] text-gray-500">{labelNegative}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 7-day Forecast Cards ───────────────────────────────────────────────────────
+function ForecastCards({ points, tFilter }) {
+  if (!points?.length) return null;
+  const maxCount = Math.max(...points.map(p => p.estimatedCount), 1);
+
+  return (
+    <div className="grid grid-cols-7 gap-1.5">
+      {points.map((pt, i) => {
+        const isPos     = pt.sentiment === "POSITIVE";
+        const isNeg     = pt.sentiment === "NEGATIVE";
+        const barPct    = Math.round((pt.estimatedCount / maxCount) * 100);
+        const sentColor = isPos ? "#4ade80" : isNeg ? "#f87171" : "#facc15";
+        const sentBg    = isPos ? "bg-green-500/10 border-green-500/20"
+                        : isNeg ? "bg-red-500/10 border-red-500/20"
+                        : "bg-yellow-500/10 border-yellow-500/20";
+        const sentLabel = isPos ? tFilter("positive") : isNeg ? tFilter("negative") : tFilter("neutral");
+
         return (
-          <div key={i} className="flex-1 flex flex-col justify-end group relative">
-            <div
-              className={`rounded-t-sm ${color} transition-all`}
-              style={{ height: `${Math.max(pct, 4)}%` }}
-            />
-            {/* Tooltip */}
-            <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-10 pointer-events-none">
-              <div className="bg-gray-900 border border-white/10 rounded-lg px-2 py-1 text-[9px] text-gray-300 whitespace-nowrap shadow-xl">
-                <div>{s.date}</div>
-                <div className="text-white font-medium">{s.count} {t("articles")}</div>
-                <div className="text-green-400">+{s.positive}</div>
-                <div className="text-red-400">-{s.negative}</div>
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border ${sentBg}`}
+          >
+            <span className="text-[9px] text-gray-500 font-medium">{pt.date?.slice(5)}</span>
+            <div className="w-full flex flex-col items-center gap-1">
+              <div className="w-full h-12 bg-white/5 rounded-lg flex flex-col justify-end overflow-hidden">
+                <div
+                  className="w-full rounded-lg transition-all"
+                  style={{ height: `${Math.max(barPct, 8)}%`, background: `${sentColor}60` }}
+                />
               </div>
+              <span className="text-[9px] font-bold" style={{ color: sentColor }}>
+                {pt.estimatedCount}
+              </span>
             </div>
-          </div>
+            <span className="text-[8px] font-medium" style={{ color: sentColor }}>
+              {sentLabel}
+            </span>
+          </motion.div>
         );
       })}
     </div>
   );
 }
 
-// ── Forecast point row ─────────────────────────────────────────────────────────
-function ForecastRow({ point, index, tFilter }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: 10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.04 }}
-      className="flex items-center justify-between gap-3 py-1.5 border-b border-white/5 last:border-0"
-    >
-      <span className="text-[10px] text-gray-500 w-20">{point.date}</span>
-      <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
-        <div
-          className={`h-2 rounded-full ${SENT_COLOR[point.sentiment] || "bg-gray-500/40"} transition-all`}
-          style={{ width: `${Math.min(100, (point.estimatedCount / 20) * 100)}%` }}
-        />
-      </div>
-      <span className="text-[10px] text-gray-400 w-8 text-right">{point.estimatedCount}</span>
-      <span className={`text-[9px] px-1.5 py-0.5 rounded border ${
-        point.sentiment === "POSITIVE" ? "text-green-400 border-green-500/30 bg-green-500/10" :
-        point.sentiment === "NEGATIVE" ? "text-red-400 border-red-500/30 bg-red-500/10" :
-        "text-yellow-400 border-yellow-500/30 bg-yellow-500/10"
-      }`}>
-        {point.sentiment === "POSITIVE" ? tFilter("positive")
-          : point.sentiment === "NEGATIVE" ? tFilter("negative")
-          : tFilter("neutral")}
-      </span>
-    </motion.div>
-  );
-}
-
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function TrendPredictionPanel() {
-  const t = useTranslations("trend");
+  const t       = useTranslations("trend");
   const tFilter = useTranslations("filter");
+  const locale  = useLocale();
 
-  const [keyword, setKeyword]   = useState("");
-  const [days,    setDays]      = useState(30);
-  const [data,    setData]      = useState(null);
-  const [loading, setLoading]   = useState(false);
-  const [error,   setError]     = useState("");
-  const [input,   setInput]     = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [days,    setDays]    = useState(30);
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+  const [input,   setInput]   = useState("");
 
   const fetchTrends = useCallback(async (kw = keyword, d = days) => {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ days: d });
+      const params = new URLSearchParams({ days: d, locale });
       if (kw) params.set("keyword", kw);
       const res  = await fetch(`/api/trends?${params}`);
       const json = await res.json();
@@ -104,7 +163,6 @@ export default function TrendPredictionPanel() {
     setLoading(false);
   }, [keyword, days]);
 
-  // Load on mount with defaults
   useEffect(() => { fetchTrends("", 30); }, []);
 
   const handleSearch = () => {
@@ -116,6 +174,7 @@ export default function TrendPredictionPanel() {
 
   return (
     <div className="flex flex-col gap-4">
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
@@ -141,7 +200,9 @@ export default function TrendPredictionPanel() {
               <button
                 key={d}
                 onClick={() => { setDays(d); fetchTrends(keyword, d); }}
-                className={`text-[10px] px-2 py-0.5 rounded-md transition ${days === d ? "bg-white/10 text-white" : "text-gray-500 hover:text-gray-300"}`}
+                className={`text-[10px] px-2 py-0.5 rounded-md transition ${
+                  days === d ? "bg-white/10 text-white" : "text-gray-500 hover:text-gray-300"
+                }`}
               >
                 {d}{t("dSuffix")}
               </button>
@@ -196,21 +257,21 @@ export default function TrendPredictionPanel() {
 
       {!loading && data && (
         <>
-          {/* Historical bar chart */}
-          <div>
-            <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-2">
-              {t("volumeLabel", { days, count: series.length })}
+          {/* Section 1 — Sentiment line chart */}
+          <div className="rounded-xl bg-white/3 border border-white/5 p-3">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">
+              {t("sentimentOverTime", { days })}
             </p>
             {series.length === 0 ? (
               <p className="text-xs text-gray-600 text-center py-6">{t("noArticles")}</p>
             ) : (
-              <MiniBarChart series={series} t={t} />
+              <SentimentLineChart series={series} labelPositive={tFilter("positive")} labelNegative={tFilter("negative")} />
             )}
           </div>
 
           {forecast && (
             <>
-              {/* AI analysis */}
+              {/* Section 2 — AI analysis */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="p-3 rounded-xl bg-white/5 border border-white/10">
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">{t("trendAnalysis")}</p>
@@ -222,15 +283,11 @@ export default function TrendPredictionPanel() {
                 </div>
               </div>
 
-              {/* Forecast points */}
+              {/* Section 3 — 7-day forecast cards */}
               {forecast.forecastPoints?.length > 0 && (
                 <div>
                   <p className="text-[10px] text-gray-600 uppercase tracking-wider mb-2">{t("projected")}</p>
-                  <div className="rounded-xl bg-white/3 border border-white/5 px-3 py-1">
-                    {forecast.forecastPoints.map((pt, i) => (
-                      <ForecastRow key={i} point={pt} index={i} tFilter={tFilter} />
-                    ))}
-                  </div>
+                  <ForecastCards points={forecast.forecastPoints} tFilter={tFilter} />
                 </div>
               )}
             </>

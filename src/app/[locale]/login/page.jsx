@@ -38,9 +38,8 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        login(data.user, data.token); // save to AuthContext + localStorage
-        setMessage({ text: "Login successful! Redirecting...", type: "success" });
-        setTimeout(() => router.push(`/${locale}`), 800);
+        login(data.user, data.token);
+        router.push(`/${locale}/dashboard`);
       } else {
         setMessage({ text: data.message || "Login failed", type: "error" });
       }

@@ -15,20 +15,6 @@ function getAuthHeaders() {
   };
 }
 
-// Emoji icons for each topic label
-const TOPIC_ICONS = {
-  "科技產業": "💻",
-  "政治選舉": "🗳️",
-  "經濟金融": "📈",
-  "國際關係": "🌐",
-  "社會民生": "🏘️",
-  "環境氣候": "🌿",
-  "健康醫療": "🏥",
-  "娛樂文化": "🎭",
-  "軍事安全": "🛡️",
-  "教育學術": "🎓",
-};
-
 export default function TopicModelingPanel() {
   const t = useTranslations("topics");
 
@@ -99,7 +85,7 @@ export default function TopicModelingPanel() {
       const r = await fetch(`${TOPICS_BASE}/run`, {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify({ limit: 50 }),
+        body: JSON.stringify({ limit: 200 }),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "Failed");
@@ -128,7 +114,6 @@ export default function TopicModelingPanel() {
       {/* ── Header ── */}
       <div className="tp-header">
         <div className="tp-title-group">
-          <span className="tp-title-icon">🧩</span>
           <p className="tp-title">{t("title")}</p>
         </div>
         <div className="tp-controls">
@@ -161,14 +146,12 @@ export default function TopicModelingPanel() {
             label: t("analyzed"),
             value: loadingStatus ? "…" : (status ? status.total.toLocaleString() : "—"),
             sub: null,
-            icon: "📰",
             accent: "#378ADD",
           },
           {
             label: t("clustered"),
             value: loadingStatus ? "…" : (status ? status.clustered.toLocaleString() : "—"),
             sub: status && !loadingStatus ? `${pct}% coverage` : null,
-            icon: "🏷️",
             accent: "#5DCAA5",
             highlight: true,
           },
@@ -176,20 +159,17 @@ export default function TopicModelingPanel() {
             label: t("unclustered"),
             value: loadingStatus ? "…" : (status ? status.unclustered.toLocaleString() : "—"),
             sub: null,
-            icon: "❓",
             accent: "#F09595",
           },
           {
             label: t("clusters"),
             value: loadingStatus ? "…" : String(topicCount),
             sub: null,
-            icon: "🗂️",
             accent: "#C084FC",
           },
         ].map((card) => (
           <div key={card.label} className={`tp-card ${card.highlight ? "tp-card--highlight" : ""}`}>
             <div className="tp-card-top">
-              <span className="tp-card-icon">{card.icon}</span>
               <p className="tp-card-label">{card.label}</p>
             </div>
             <p className="tp-card-value" style={{ color: card.accent }}>{card.value}</p>
@@ -211,7 +191,6 @@ export default function TopicModelingPanel() {
       {/* ── Toast ── */}
       {toast && (
         <div className={`tp-toast tp-toast--${toast.type}`}>
-          <span className="tp-toast-icon">{toast.type === "err" ? "⚠️" : "✅"}</span>
           {toast.msg}
         </div>
       )}
@@ -234,7 +213,6 @@ export default function TopicModelingPanel() {
           </div>
         ) : topics.length === 0 ? (
           <div className="tp-empty">
-            <p className="tp-empty-icon">🧩</p>
             <p className="tp-empty-title">No clustered articles in this period</p>
             <p className="tp-empty-sub">Run the pipeline to assign topic clusters to analyzed articles.</p>
           </div>
@@ -247,12 +225,13 @@ export default function TopicModelingPanel() {
                 const pNeg = Math.max(0, 100 - pPos - pNeu);
                 const barW = Math.round((tp.total / maxTotal) * 100);
                 const conf = Math.round((tp.avgConfidence || 0) * 100);
-                const icon = TOPIC_ICONS[tp.label] || "📌";
-                const dominantSentiment = pPos >= pNeu && pPos >= pNeg
-                  ? "positive"
-                  : pNeg >= pPos && pNeg >= pNeu
-                    ? "negative"
-                    : "neutral";
+                const displayLabel = t(`labels.${tp.label}`, { fallback: tp.label });
+                const sentimentScore = tp.total > 0
+                  ? Math.round(((tp.positive - tp.negative) / tp.total) * 5 + 5)
+                  : 5;
+                const scoreColor = sentimentScore >= 7 ? "#5DCAA5"
+                  : sentimentScore <= 3 ? "#F09595"
+                  : "#B4B2A9";
 
                 return (
                   <div
@@ -262,8 +241,7 @@ export default function TopicModelingPanel() {
                   >
                     {/* Label */}
                     <div className="tp-bar-label">
-                      <span className="tp-bar-icon">{icon}</span>
-                      <span className="tp-bar-text" title={tp.label}>{tp.label}</span>
+                      <span className="tp-bar-text" title={tp.label}>{displayLabel}</span>
                     </div>
 
                     {/* Bar + confidence */}
@@ -279,13 +257,6 @@ export default function TopicModelingPanel() {
                         </div>
                       </div>
 
-                      {/* Percentage pills */}
-                      <div className="tp-pct-row">
-                        {pPos > 0 && <span className="tp-pct tp-pct--pos">+{pPos}%</span>}
-                        {pNeu > 0 && <span className="tp-pct tp-pct--neu">{pNeu}%</span>}
-                        {pNeg > 0 && <span className="tp-pct tp-pct--neg">-{pNeg}%</span>}
-                      </div>
-
                       {/* Confidence row */}
                       <div className="tp-conf-row">
                         <span className="tp-conf-label">conf.</span>
@@ -296,10 +267,16 @@ export default function TopicModelingPanel() {
                       </div>
                     </div>
 
-                    {/* Count */}
+                    {/* Score + count */}
                     <div className="tp-bar-count">
-                      <span className={`tp-sentiment-dot tp-sentiment-dot--${dominantSentiment}`} />
-                      <span>{tp.total}</span>
+                      <span
+                        className="tp-score-badge"
+                        style={{ color: scoreColor, borderColor: scoreColor }}
+                        title="Sentiment score: 10 = very positive, 5 = neutral, 0 = very negative"
+                      >
+                        {sentimentScore}/10
+                      </span>
+                      <span className="tp-bar-total">{tp.total}</span>
                     </div>
                   </div>
                 );
@@ -309,18 +286,21 @@ export default function TopicModelingPanel() {
             {/* Legend */}
             <div className="tp-legend">
               {[
-                { color: "#5DCAA5", label: t("positive"), cls: "pos" },
-                { color: "#B4B2A9", label: t("neutral"),  cls: "neu" },
-                { color: "#F09595", label: t("negative"), cls: "neg" },
+                { color: "#5DCAA5", label: t("positive") },
+                { color: "#B4B2A9", label: t("neutral") },
+                { color: "#F09595", label: t("negative") },
               ].map((l) => (
                 <span key={l.label} className="tp-legend-item">
                   <span className="tp-legend-dot" style={{ background: l.color }} />
                   {l.label}
                 </span>
               ))}
-              <span className="tp-legend-item tp-legend-conf">
+              <span className="tp-legend-item tp-legend-conf" title="How consistently the AI assigned this topic — higher means more reliable classification">
                 <span className="tp-legend-dot" style={{ background: "#378ADD" }} />
                 Confidence
+              </span>
+              <span className="tp-legend-note">
+                Score: 10 = very positive · 5 = neutral · 0 = very negative
               </span>
             </div>
           </>
@@ -328,13 +308,11 @@ export default function TopicModelingPanel() {
       </div>
 
       <style>{`
-        /* ── Panel wrapper ── */
         .topic-panel {
           padding: 1.5rem 0;
           font-family: var(--font-sans, sans-serif);
         }
 
-        /* ── Header ── */
         .tp-header {
           display: flex;
           align-items: center;
@@ -348,7 +326,6 @@ export default function TopicModelingPanel() {
           align-items: center;
           gap: 8px;
         }
-        .tp-title-icon { font-size: 18px; }
         .tp-title {
           margin: 0;
           font-size: 15px;
@@ -401,7 +378,6 @@ export default function TopicModelingPanel() {
         }
         @keyframes tp-spin { to { transform: rotate(360deg); } }
 
-        /* ── Stat Cards ── */
         .tp-cards {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -426,7 +402,6 @@ export default function TopicModelingPanel() {
           gap: 5px;
           margin-bottom: 6px;
         }
-        .tp-card-icon { font-size: 13px; }
         .tp-card-label {
           margin: 0;
           font-size: 11px;
@@ -466,7 +441,6 @@ export default function TopicModelingPanel() {
           white-space: nowrap;
         }
 
-        /* ── Toast ── */
         .tp-toast {
           margin-bottom: 12px;
           padding: 8px 12px;
@@ -487,13 +461,11 @@ export default function TopicModelingPanel() {
           color: var(--color-text-danger, #e05555);
           border: 0.5px solid var(--color-border-danger, rgba(240,149,149,0.3));
         }
-        .tp-toast-icon { font-size: 14px; }
         @keyframes tp-fadein {
           from { opacity: 0; transform: translateY(-4px); }
           to   { opacity: 1; transform: translateY(0); }
         }
 
-        /* ── Distribution ── */
         .tp-distribution { margin-top: 1.25rem; }
         .tp-dist-header {
           display: flex;
@@ -518,7 +490,6 @@ export default function TopicModelingPanel() {
           border: 0.5px solid var(--color-border-secondary);
         }
 
-        /* ── Loading ── */
         .tp-loading {
           display: flex;
           flex-direction: column;
@@ -529,10 +500,7 @@ export default function TopicModelingPanel() {
           font-size: 13px;
         }
         .tp-loading p { margin: 0; }
-        .tp-loading-dots {
-          display: flex;
-          gap: 5px;
-        }
+        .tp-loading-dots { display: flex; gap: 5px; }
         .tp-loading-dots span {
           width: 6px;
           height: 6px;
@@ -547,13 +515,11 @@ export default function TopicModelingPanel() {
           40% { transform: scale(1); opacity: 1; }
         }
 
-        /* ── Empty state ── */
         .tp-empty {
           text-align: center;
           padding: 2.5rem 1rem;
           color: var(--color-text-tertiary);
         }
-        .tp-empty-icon { font-size: 32px; margin: 0 0 8px; }
         .tp-empty-title {
           font-size: 14px;
           font-weight: 500;
@@ -562,39 +528,27 @@ export default function TopicModelingPanel() {
         }
         .tp-empty-sub { font-size: 12px; margin: 0; }
 
-        /* ── Bars ── */
         .tp-bars {
           display: flex;
           flex-direction: column;
           gap: 12px;
         }
-        .tp-bar-row {
-          display: grid;
-          grid-template-columns: 110px 1fr 52px;
-          align-items: center;
-          gap: 10px;
-          animation: tp-fadein 0.3s ease both;
-        }
-
-        /* Label column */
         .tp-bar-label {
           display: flex;
           align-items: center;
-          gap: 5px;
           justify-content: flex-end;
           text-align: right;
         }
-        .tp-bar-icon { font-size: 14px; flex-shrink: 0; }
         .tp-bar-text {
           font-size: 12px;
           color: var(--color-text-primary);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          white-space: normal;
+          overflow: visible;
+          text-overflow: unset;
+          word-break: break-word;
           font-weight: 500;
         }
 
-        /* Bar column */
         .tp-bar-track-wrap { display: flex; flex-direction: column; gap: 3px; }
         .tp-bar-track {
           height: 18px;
@@ -613,21 +567,29 @@ export default function TopicModelingPanel() {
         .tp-bar-neu { background: #B4B2A9; }
         .tp-bar-neg { background: #F09595; }
 
-        .tp-pct-row {
+        .tp-score-badge {
+          font-size: 12px;
+          font-weight: 700;
+          padding: 2px 7px;
+          border-radius: 20px;
+          border: 1px solid;
+          background: transparent;
+          letter-spacing: -0.01em;
+          white-space: nowrap;
+        }
+        .tp-bar-total {
+          font-size: 11px;
+          color: var(--color-text-tertiary);
+          margin-top: 2px;
+        }
+
+        .tp-bar-count {
           display: flex;
-          gap: 4px;
-          flex-wrap: wrap;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 2px;
+          justify-content: center;
         }
-        .tp-pct {
-          font-size: 10px;
-          padding: 1px 5px;
-          border-radius: 3px;
-          font-weight: 600;
-          line-height: 1.4;
-        }
-        .tp-pct--pos { background: rgba(93,202,165,0.15); color: #3aaa82; }
-        .tp-pct--neu { background: rgba(180,178,169,0.15); color: var(--color-text-secondary); }
-        .tp-pct--neg { background: rgba(240,149,149,0.15); color: #d94f4f; }
 
         .tp-conf-row {
           display: flex;
@@ -660,27 +622,14 @@ export default function TopicModelingPanel() {
           text-align: right;
         }
 
-        /* Count column */
-        .tp-bar-count {
-          display: flex;
+        .tp-bar-row {
+          display: grid;
+          grid-template-columns: 140px 1fr 64px;
           align-items: center;
-          gap: 5px;
-          justify-content: flex-end;
-          font-size: 12px;
-          color: var(--color-text-secondary);
-          font-weight: 500;
+          gap: 10px;
+          animation: tp-fadein 0.3s ease both;
         }
-        .tp-sentiment-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-        .tp-sentiment-dot--positive { background: #5DCAA5; }
-        .tp-sentiment-dot--neutral  { background: #B4B2A9; }
-        .tp-sentiment-dot--negative { background: #F09595; }
 
-        /* ── Legend ── */
         .tp-legend {
           display: flex;
           gap: 14px;
@@ -705,6 +654,11 @@ export default function TopicModelingPanel() {
         }
         .tp-legend-conf .tp-legend-dot {
           border-radius: 50%;
+        }
+        .tp-legend-note {
+          font-size: 12px;
+          color: var(--color-text-tertiary);
+          margin-left: auto;
         }
       `}</style>
     </div>

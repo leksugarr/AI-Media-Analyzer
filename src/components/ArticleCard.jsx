@@ -1,8 +1,4 @@
 // ArticleCard.jsx
-// Supports two usage modes:
-//   1. <ArticleCard article={articleObj} /> — renders full card with credibility badge
-//   2. <ArticleCard className="...">children</ArticleCard> — legacy wrapper mode
-
 import { useTranslations, useLocale } from "next-intl";
 
 const CREDIBILITY_STYLE = {
@@ -21,7 +17,6 @@ export default function ArticleCard({ article, children, className }) {
   const t = useTranslations("filter");
   const locale = useLocale();
 
-  // ── Legacy wrapper mode ──────────────────────────────────────────────────────
   if (!article) {
     return (
       <div className={`p-6 rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-lg ${className || ""}`}>
@@ -30,7 +25,6 @@ export default function ArticleCard({ article, children, className }) {
     );
   }
 
-  // ── Full article card mode ────────────────────────────────────────────────────
   const {
     title, url, source, description,
     sentiment, credibility, publishedAt, keywords,
@@ -42,11 +36,11 @@ export default function ArticleCard({ article, children, className }) {
     : credibility?.label === "credible" ? t("credible")
     : null;
 
-  const sentColor = SENTIMENT_COLOR[sentiment?.label?.toUpperCase()] || "#4a5a7a";
-  const sentLabel = sentiment?.label === "POSITIVE" ? t("positive")
-    : sentiment?.label === "NEGATIVE" ? t("negative")
-    : sentiment?.label === "NEUTRAL" ? t("neutral")
-    : sentiment?.label || "";
+  const rawLabel = sentiment?.label?.toUpperCase();
+  const sentColor = SENTIMENT_COLOR[rawLabel] || SENTIMENT_COLOR.NEUTRAL;
+  const sentLabel = rawLabel === "POSITIVE" ? t("positive")
+    : rawLabel === "NEGATIVE" ? t("negative")
+    : t("neutral");
 
   const dateLocale = locale === "zh" ? "zh-TW" : "en-US";
   const date = publishedAt ? new Date(publishedAt).toLocaleDateString(dateLocale, { month: "short", day: "numeric" }) : "";
@@ -76,8 +70,6 @@ export default function ArticleCard({ article, children, className }) {
         {date && (
           <span style={{ fontSize: 11, color: "#3d4a6b" }}>{date}</span>
         )}
-
-        {/* Credibility badge */}
         {credStyle && (
           <span
             title={credibility.reason || ""}
@@ -135,18 +127,16 @@ export default function ArticleCard({ article, children, className }) {
 
       {/* Bottom row: sentiment + keywords */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 2 }}>
-        {sentiment?.label && (
-          <span style={{
-            fontSize: 11, fontWeight: 600,
-            color: sentColor,
-            background: `${sentColor}18`,
-            border: `1px solid ${sentColor}44`,
-            borderRadius: 6,
-            padding: "2px 8px",
-          }}>
-            {sentLabel}
-          </span>
-        )}
+        <span style={{
+          fontSize: 11, fontWeight: 600,
+          color: sentColor,
+          background: `${sentColor}18`,
+          border: `1px solid ${sentColor}44`,
+          borderRadius: 6,
+          padding: "2px 8px",
+        }}>
+          {sentLabel}
+        </span>
         {keywords?.slice(0, 3).map(kw => (
           <span key={kw} style={{
             fontSize: 11, color: "#3d4a6b",
@@ -158,8 +148,6 @@ export default function ArticleCard({ article, children, className }) {
             {kw}
           </span>
         ))}
-
-        {/* Credibility reason hint */}
         {credibility?.reason && credibility.label !== "credible" && (
           <span style={{ fontSize: 11, color: "#3d4a6b", marginLeft: "auto", fontStyle: "italic" }}>
             {credibility.reason.slice(0, 60)}{credibility.reason.length > 60 ? "…" : ""}

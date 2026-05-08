@@ -475,11 +475,7 @@ const YOUTUBE_WATCHLIST = [
 ];
 
 /** Topic feeds to auto-pull every cycle */
-const TOPIC_WATCHLIST = [
-  { topic: "topStories", locale: "zh-TW" },
-  { topic: "technology",  locale: "zh-TW" },
-];
-
+const TOPIC_WATCHLIST = [];
 /**
  * Run one full crawl cycle: keywords + topics -> save to MongoDB.
  * Duplicates are silently skipped via the unique URL index.
