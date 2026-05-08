@@ -6,10 +6,9 @@ import { connectDB } from "./db.js";
 import { config, validateConfig } from "./config.js";
 import routes from "./routes.js";
 import { startNewsScheduler } from "./crawler.js";
+import rateLimit from "express-rate-limit";
 
 const app = express();
-
-console.log("HF_API_KEY:", config.HF_API_KEY);
 
 /* ─── Validate Config ──────────────────────────────────────────────────────── */
 try {
@@ -33,7 +32,22 @@ app.use(
   })
 );
 
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many login attempts, please try again later." },
+});
+
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: "Too many requests, please try again later." },
+});
+
 app.use(express.json({ limit: "1mb" }));
+app.use("/api/auth", authLimiter);
+app.use("/api", globalLimiter);
 
 /* ─── Health Check ─────────────────────────────────────────────────────────── */
 app.get("/health", (req, res) => {

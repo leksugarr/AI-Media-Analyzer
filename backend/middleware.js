@@ -38,3 +38,38 @@ export const validateComparison = (req, res, next) => {
 
   next();
 };
+
+// Strip characters that could affect MongoDB queries or prompt injection
+function sanitizeString(str) {
+  return str
+    .trim()
+    .slice(0, 200)
+    .replace(/[${}]/g, ""); // strip MongoDB operators and template literals
+}
+
+export const sanitizeKeyword = (req, res, next) => {
+  // sanitize body fields
+  for (const field of ["keyword", "query", "forum"]) {
+    if (req.body?.[field] !== undefined) {
+        if (typeof req.body[field] !== "string") {
+        return res.status(400).json({ error: `${field} must be a string` });
+      }
+      req.body[field] = sanitizeString(req.body[field]);
+      if (!req.body[field]) {
+        return res.status(400).json({ error: `${field} cannot be empty` });
+      }
+    }
+  }
+
+  // sanitize query params
+  for (const field of ["keyword", "query"]) {
+if (req.query?.[field] !== undefined) {
+        if (typeof req.query[field] !== "string") {
+        return res.status(400).json({ error: `${field} must be a string` });
+      }
+      req.query[field] = sanitizeString(req.query[field]);
+    }
+  }
+
+  next();
+};

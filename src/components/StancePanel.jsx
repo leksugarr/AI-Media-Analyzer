@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 
 const LABEL_STYLE = {
   "支持": "text-green-400 border-green-500/30 bg-green-500/10",
@@ -8,6 +9,7 @@ const LABEL_STYLE = {
 };
 
 export default function StancePanel() {
+  const t = useTranslations("stance");
   const [data, setData]       = useState(null);
   const [running, setRunning] = useState(false);
   const [msg, setMsg]         = useState("");
@@ -38,10 +40,10 @@ export default function StancePanel() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-gray-500 uppercase tracking-wider">Stance Analysis</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider">{t("title")}</p>
           {data && (
             <p className="text-[10px] text-gray-600 mt-0.5">
-              {data.scored} / {data.total} articles scored · {data.unscored} pending
+              {data.scored} / {data.total} {t("scored")} · {data.unscored} {t("pending")}
             </p>
           )}
         </div>
@@ -50,7 +52,7 @@ export default function StancePanel() {
           disabled={running}
           className="text-[10px] px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 rounded-lg transition disabled:opacity-40"
         >
-          {running ? "Running..." : "▶ Run"}
+          {running ? t("running") : t("run")}
         </button>
       </div>
 
@@ -83,7 +85,7 @@ export default function StancePanel() {
         </div>
       ) : (
         <p className="text-xs text-gray-600 text-center py-6">
-          {data ? "No stance data yet — click Run to start" : "Loading..."}
+          {data ? t("noData") : t("loading")}
         </p>
       )}
     </div>

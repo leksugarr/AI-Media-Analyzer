@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useTranslations } from "next-intl";
 
 // ── Color mapping: sentiment label + intensity → Tailwind bg class ────────────
 function cellColor(cell) {
@@ -34,6 +35,9 @@ function shortWeek(w) {
 }
 
 export default function KeywordHeatmap() {
+  const t = useTranslations("heatmap");
+  const tFilter = useTranslations("filter");
+
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [tooltip, setTooltip] = useState(null); // { keyword, week, cell }
@@ -48,7 +52,7 @@ export default function KeywordHeatmap() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10">
-        <p className="text-xs text-gray-600 animate-pulse">Loading heatmap...</p>
+        <p className="text-xs text-gray-600 animate-pulse">{t("loading")}</p>
       </div>
     );
   }
@@ -56,10 +60,8 @@ export default function KeywordHeatmap() {
   if (!data || !data.keywords?.length) {
     return (
       <div className="text-center py-8">
-        <p className="text-gray-600 text-xs">No heatmap data yet</p>
-        <p className="text-gray-700 text-[10px] mt-1">
-          Add keywords to the watchlist and run the crawler to populate data
-        </p>
+        <p className="text-gray-600 text-xs">{t("noData")}</p>
+        <p className="text-gray-700 text-[10px] mt-1">{t("noDataHint")}</p>
       </div>
     );
   }
@@ -72,16 +74,16 @@ export default function KeywordHeatmap() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-gray-500 uppercase tracking-wider">Sentiment Heatmap</p>
-          <p className="text-[10px] text-gray-600 mt-0.5">Keyword sentiment intensity — last 12 weeks</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider">{t("title")}</p>
+          <p className="text-[10px] text-gray-600 mt-0.5">{t("subtitle")}</p>
         </div>
         {/* Legend */}
         <div className="flex items-center gap-3">
           {[
-            { color: "bg-green-500/60", label: "Positive" },
-            { color: "bg-red-500/60",   label: "Negative" },
-            { color: "bg-yellow-500/40",label: "Neutral"  },
-            { color: "bg-white/5",      label: "No data"  },
+            { color: "bg-green-500/60", label: tFilter("positive") },
+            { color: "bg-red-500/60",   label: tFilter("negative") },
+            { color: "bg-yellow-500/40",label: tFilter("neutral")  },
+            { color: "bg-white/5",      label: t("noData")         },
           ].map((l) => (
             <div key={l.label} className="flex items-center gap-1.5">
               <span className={`w-2.5 h-2.5 rounded-sm ${l.color}`} />
@@ -154,16 +156,21 @@ export default function KeywordHeatmap() {
           {tooltip.cell ? (
             <>
               <p className="text-gray-300 mt-1">
-                Sentiment: <span className={
+                {t("tooltipSentiment")}:{" "}
+                <span className={
                   tooltip.cell.label === "POSITIVE" ? "text-green-400" :
                   tooltip.cell.label === "NEGATIVE" ? "text-red-400" : "text-yellow-400"
-                }>{tooltip.cell.label}</span>
+                }>
+                  {tooltip.cell.label === "POSITIVE" ? tFilter("positive")
+                    : tooltip.cell.label === "NEGATIVE" ? tFilter("negative")
+                    : tFilter("neutral")}
+                </span>
               </p>
-              <p className="text-gray-400">Score: {tooltip.cell.avg}</p>
-              <p className="text-gray-400">Articles: {tooltip.cell.count}</p>
+              <p className="text-gray-400">{t("tooltipScore")}: {tooltip.cell.avg}</p>
+              <p className="text-gray-400">{t("tooltipArticles")}: {tooltip.cell.count}</p>
             </>
           ) : (
-            <p className="text-gray-600 mt-1">No data this week</p>
+            <p className="text-gray-600 mt-1">{t("tooltipNoData")}</p>
           )}
         </div>
       )}

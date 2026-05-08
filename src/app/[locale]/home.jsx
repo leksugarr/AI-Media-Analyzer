@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations, useLocale } from "next-intl";
 import ArticleCard from "@/components/ArticleCard";
 import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -70,14 +71,16 @@ export default function HomePage() {
   const [conversationId, setConversationId] = useState(null);
 
 
-  const { user, token, loading: authLoading } = useAuth();
-  const router = useRouter();
-  const bottomRef=useRef(null);
+const { user, token, loading: authLoading } = useAuth();
+const router = useRouter();
+const bottomRef = useRef(null);
+const t = useTranslations("home");
+const locale = useLocale();
 
   // Redirect to login if not logged in
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push("/login");
+router.push(`/${locale}/login`);
     }
   }, [user, authLoading, router]);
   useEffect(() => {
@@ -174,12 +177,12 @@ const handleKeyDown = (e) => {
             >
               <ArticleCard className="p-3 flex flex-col gap-2 h-full">
                 <div className="flex justify-between items-center">
-                  <p className="text-xs text-gray-500 uppercase tracking-wider">Conversations</p>
-                  <button onClick={startNewChat} className="text-xs text-blue-400 hover:text-blue-300">+ New</button>
+<p className="text-xs text-gray-500 uppercase tracking-wider">{t("conversations")}</p>
+<button onClick={startNewChat} className="text-xs text-blue-400 hover:text-blue-300">{t("newChat")}</button>
                 </div>
                 <div className="flex flex-col gap-1 overflow-y-auto max-h-[500px]">
                   {conversations.length === 0 ? (
-                    <p className="text-xs text-gray-600 text-center py-4">No conversations yet</p>
+<p className="text-xs text-gray-600 text-center py-4">{t("noConversations")}</p>
                   ) : conversations.map(c => (
                     <button key={c._id} onClick={() => loadConversation(c._id)}
                       className={`text-left px-3 py-2 rounded-xl text-xs hover:bg-white/10 transition ${conversationId === c._id ? "bg-white/10 text-white" : "text-gray-400"}`}>
@@ -198,8 +201,8 @@ const handleKeyDown = (e) => {
 
           {/* Header */}
           <div className="text-center space-y-1">
-            <h1 className="text-4xl font-bold">AI Topic Analyzer</h1>
-            <p className="text-gray-400 text-sm">Ask about any real-world topic</p>
+      <h1 className="text-4xl font-bold">{t("title")}</h1>
+      <p className="text-gray-400 text-sm">{t("subtitle")}</p>
             <p className="text-xs text-gray-500">{user.email}</p>
           </div>
 
@@ -207,7 +210,7 @@ const handleKeyDown = (e) => {
           <ArticleCard className="flex flex-col gap-4 min-h-[400px] max-h-[600px] overflow-y-auto">
             {messages.length === 0 && (
               <div className="flex-1 flex items-center justify-center py-16">
-                <p className="text-gray-600 text-sm">Ask me about any real-world topic to get started</p>
+<p className="text-gray-600 text-sm">{t("emptyChat")}</p>
               </div>
             )}
 
@@ -250,7 +253,7 @@ const handleKeyDown = (e) => {
                       {/* Sentiment */}
                       {msg.content.sentiment && (
                         <ArticleCard className="p-3 space-y-2">
-                          <p className="text-xs text-gray-500 uppercase tracking-wider">Sentiment</p>
+<p className="text-xs text-gray-500 uppercase tracking-wider">{t("sentiment")}</p>
                           <div className="flex items-center gap-3">
                             <span className={`text-lg font-bold ${
                               msg.content.sentiment.label === "POSITIVE" ? "text-green-400" :
@@ -272,7 +275,7 @@ const handleKeyDown = (e) => {
                       {/* Heatmap */}
                       {msg.content.heatmap && (
                         <ArticleCard className="p-3">
-                          <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Discussion Intensity</p>
+<p className="text-xs text-gray-500 uppercase tracking-wider mb-3">{t("intensity")}</p>
                           <Heatmap data={msg.content.heatmap} />
                         </ArticleCard>
                       )}
@@ -306,7 +309,7 @@ const handleKeyDown = (e) => {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about any real-world topic..."
+placeholder={t("placeholder")}
                 rows={2}
                 className="flex-1 bg-transparent outline-none text-sm resize-none leading-relaxed placeholder-gray-600"
               />
@@ -315,14 +318,14 @@ const handleKeyDown = (e) => {
                   onClick={() => setShowHistory(p => !p)}
                   className="text-xs text-gray-400 hover:text-white px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg transition"
                 >
-                  {showHistory ? "Hide" : "History"}
+{showHistory ? t("hideHistory") : t("history")}
                 </button>
                 <button
                   onClick={() => handleSend()}
                   disabled={loading || !input.trim()}
                   className="px-4 py-1.5 bg-blue-600/40 hover:bg-blue-600/60 border border-blue-500/30 rounded-lg text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  {loading ? "..." : "Send"}
+{loading ? t("loading") : t("send")}
                 </button>
               </div>
             </div>

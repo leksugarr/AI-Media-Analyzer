@@ -115,13 +115,16 @@ const articleSchema = new mongoose.Schema(
 
 
       // ─── Stance Analysis (Groq-based) ────────────────────────────────────────────
-    stance: {
+stance: {
       label:      { type: String, enum: ["支持", "反對", "中立"], default: null },
       reason:     { type: String, default: "" },
       analyzedAt: { type: Date, default: null },
     },
-    
 
+    // ─── Deduplication ────────────────────────────────────────────────────────
+    isDuplicate:  { type: Boolean, default: false },
+    canonicalId:  { type: mongoose.Schema.Types.ObjectId, ref: "Article", default: null },
+    
   },
   { timestamps: true }
 );

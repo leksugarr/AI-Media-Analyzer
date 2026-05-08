@@ -3,10 +3,12 @@
 //   1. <ArticleCard article={articleObj} /> — renders full card with credibility badge
 //   2. <ArticleCard className="...">children</ArticleCard> — legacy wrapper mode
 
-const CREDIBILITY_CONFIG = {
-  likely_fake:  { label: "🚨 Likely Fake",  bg: "#2d0a0a", border: "#7f1d1d", color: "#f87171" },
-  suspicious:   { label: "⚠️ Suspicious",   bg: "#2d1f00", border: "#78350f", color: "#fbbf24" },
-  credible:     { label: "✅ Credible",      bg: "#051a10", border: "#14532d", color: "#4ade80" },
+import { useTranslations, useLocale } from "next-intl";
+
+const CREDIBILITY_STYLE = {
+  likely_fake: { bg: "#2d0a0a", border: "#7f1d1d", color: "#f87171" },
+  suspicious:  { bg: "#2d1f00", border: "#78350f", color: "#fbbf24" },
+  credible:    { bg: "#051a10", border: "#14532d", color: "#4ade80" },
 };
 
 const SENTIMENT_COLOR = {
@@ -16,6 +18,9 @@ const SENTIMENT_COLOR = {
 };
 
 export default function ArticleCard({ article, children, className }) {
+  const t = useTranslations("filter");
+  const locale = useLocale();
+
   // ── Legacy wrapper mode ──────────────────────────────────────────────────────
   if (!article) {
     return (
@@ -31,14 +36,25 @@ export default function ArticleCard({ article, children, className }) {
     sentiment, credibility, publishedAt, keywords,
   } = article;
 
-  const credConf = credibility?.label ? CREDIBILITY_CONFIG[credibility.label] : null;
+  const credStyle = credibility?.label ? CREDIBILITY_STYLE[credibility.label] : null;
+  const credLabel = credibility?.label === "likely_fake" ? t("likelyFake")
+    : credibility?.label === "suspicious" ? t("suspicious")
+    : credibility?.label === "credible" ? t("credible")
+    : null;
+
   const sentColor = SENTIMENT_COLOR[sentiment?.label?.toUpperCase()] || "#4a5a7a";
-  const date = publishedAt ? new Date(publishedAt).toLocaleDateString("zh-TW", { month: "short", day: "numeric" }) : "";
+  const sentLabel = sentiment?.label === "POSITIVE" ? t("positive")
+    : sentiment?.label === "NEGATIVE" ? t("negative")
+    : sentiment?.label === "NEUTRAL" ? t("neutral")
+    : sentiment?.label || "";
+
+  const dateLocale = locale === "zh" ? "zh-TW" : "en-US";
+  const date = publishedAt ? new Date(publishedAt).toLocaleDateString(dateLocale, { month: "short", day: "numeric" }) : "";
 
   return (
     <div style={{
       background: "#0f1117",
-      border: `1px solid ${credConf ? credConf.border : "#1e2130"}`,
+      border: `1px solid ${credStyle ? credStyle.border : "#1e2130"}`,
       borderRadius: 14,
       padding: "16px 18px",
       display: "flex",
@@ -62,21 +78,21 @@ export default function ArticleCard({ article, children, className }) {
         )}
 
         {/* Credibility badge */}
-        {credConf && (
+        {credStyle && (
           <span
             title={credibility.reason || ""}
             style={{
               fontSize: 11, fontWeight: 600,
-              background: credConf.bg,
-              border: `1px solid ${credConf.border}`,
-              color: credConf.color,
+              background: credStyle.bg,
+              border: `1px solid ${credStyle.border}`,
+              color: credStyle.color,
               borderRadius: 6,
               padding: "2px 8px",
               marginLeft: "auto",
               cursor: credibility.reason ? "help" : "default",
             }}
           >
-            {credConf.label}
+            {credLabel}
           </span>
         )}
       </div>
@@ -128,7 +144,7 @@ export default function ArticleCard({ article, children, className }) {
             borderRadius: 6,
             padding: "2px 8px",
           }}>
-            {sentiment.label}
+            {sentLabel}
           </span>
         )}
         {keywords?.slice(0, 3).map(kw => (

@@ -10,6 +10,8 @@ import KeywordHeatmap from "@/components/KeywordHeatmap";
 import TopicModelingPanel from "@/components/TopicModelingPanel";
 import { motion } from "framer-motion";
 import StancePanel from "@/components/StancePanel";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import { useTranslations, useLocale } from "next-intl";
 
 // ─── Keyword frequency counter ─────────────────────────────────────────────────
 function countKeywords(articles) {
@@ -68,9 +70,11 @@ function SentimentBadge({ label }) {
 }
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
-export default function DashboardPage() {
-  const { user, token, loading: authLoading } = useAuth();
+function DashboardPageInner() {
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const t = useTranslations("dashboard");
+  const locale = useLocale();
 
   const [articles, setArticles]     = useState([]);
   const [status, setStatus]         = useState(null);
@@ -103,7 +107,7 @@ export default function DashboardPage() {
   const [overallSentiment, setOverallSentiment] = useState({});
 
   useEffect(() => {
-    if (!authLoading && !user) router.push("/login");
+    if (!authLoading && !user) router.push(`/${locale}/login`);
   }, [user, authLoading, router]);
 
   useEffect(() => {
@@ -116,7 +120,8 @@ export default function DashboardPage() {
       const res = await fetch("/api/news?limit=500&analyzed=true");
       const data = await res.json();
       const counts = (data.articles || []).reduce((acc, a) => {
-        const l = a.sentiment?.label || "UNKNOWN";
+        const l = a.sentiment?.label;
+        if (!l) return acc;
         acc[l] = (acc[l] || 0) + 1;
         return acc;
       }, {});
@@ -139,7 +144,10 @@ export default function DashboardPage() {
       const data = await res.json();
       setArticles(data.articles || []);
       setTotalPages(data.pages || 1);
-    } catch { setArticles([]); }
+    } catch {
+      setArticles([]);
+      setMsg("⚠️ Could not reach the server. Make sure the backend is running.");
+    }
     setLoading(false);
   };
 
@@ -182,6 +190,65 @@ export default function DashboardPage() {
       fetchReports();
     } catch { setReportMsg("Failed to generate report"); }
     setGenReport(false);
+  };
+
+  const exportReportCSV = (r) => {
+    const rows = [
+      ["Field", "Value"],
+      ["Type", r.type],
+      ["Period From", new Date(r.period?.from).toLocaleDateString()],
+      ["Period To", new Date(r.period?.to).toLocaleDateString()],
+      ["Generated At", new Date(r.createdAt).toLocaleString()],
+      ["Total Articles", r.stats?.total ?? 0],
+      ["Positive", r.stats?.positive ?? 0],
+      ["Negative", r.stats?.negative ?? 0],
+      ["Neutral", r.stats?.neutral ?? 0],
+      ["Narrative", `"${(r.narrative || "").replace(/"/g, '""')}"`],
+      [],
+      ["Top Articles", "Sentiment"],
+      ...(r.topArticles || []).map(a => [`"${(a.title || "").replace(/"/g, '""')}"`, a.sentiment || ""]),
+    ];
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `report-${r.type}-${new Date(r.createdAt).toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportReportPDF = (r) => {
+    const win = window.open("", "_blank");
+    const from = new Date(r.period?.from).toLocaleDateString();
+    const to   = new Date(r.period?.to).toLocaleDateString();
+    const articles = (r.topArticles || []).map(a =>
+      `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px">${a.title || ""}</td>
+       <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;color:${
+         a.sentiment === "POSITIVE" ? "green" : a.sentiment === "NEGATIVE" ? "red" : "#b45"
+       }">${a.sentiment || ""}</td></tr>`
+    ).join("");
+    win.document.write(`<!DOCTYPE html><html><head><title>Report</title>
+      <style>body{font-family:sans-serif;padding:40px;color:#111}h1{font-size:22px;margin-bottom:4px}
+      .sub{color:#888;font-size:13px;margin-bottom:24px}.stats{display:flex;gap:16px;margin-bottom:24px}
+      .stat{background:#f5f5f5;border-radius:8px;padding:12px 20px;text-align:center}
+      .stat-val{font-size:24px;font-weight:700}.stat-label{font-size:11px;color:#888}
+      .narrative{background:#f9f9f9;border-left:3px solid #4f46e5;padding:12px 16px;font-size:13px;line-height:1.7;margin-bottom:24px}
+      table{width:100%;border-collapse:collapse}th{text-align:left;font-size:11px;color:#888;padding:6px 8px;border-bottom:2px solid #eee}
+      </style></head><body>
+      <h1>Sentiment Report · ${r.type?.toUpperCase()}</h1>
+      <p class="sub">${from} – ${to} · Generated ${new Date(r.createdAt).toLocaleString()}</p>
+      <div class="stats">
+        <div class="stat"><div class="stat-val">${r.stats?.total ?? 0}</div><div class="stat-label">Total</div></div>
+        <div class="stat"><div class="stat-val" style="color:green">${r.stats?.positive ?? 0}</div><div class="stat-label">Positive</div></div>
+        <div class="stat"><div class="stat-val" style="color:red">${r.stats?.negative ?? 0}</div><div class="stat-label">Negative</div></div>
+        <div class="stat"><div class="stat-val" style="color:#b45">${r.stats?.neutral ?? 0}</div><div class="stat-label">Neutral</div></div>
+      </div>
+      ${r.narrative ? `<div class="narrative">${r.narrative}</div>` : ""}
+      ${articles ? `<table><thead><tr><th>Article</th><th>Sentiment</th></tr></thead><tbody>${articles}</tbody></table>` : ""}
+      <script>window.onload=()=>window.print()</script>
+      </body></html>`);
+    win.document.close();
   };
 
   const runBatch = async () => {
@@ -241,10 +308,9 @@ export default function DashboardPage() {
   if (authLoading || !user) return null;
 
   return (
-    // ── Outer flex row: sidebar + main content side by side ──────────────────
     <div className="flex min-h-screen pt-16">
 
-      {/* Filter Sidebar — sits outside the max-w container */}
+      {/* Filter Sidebar */}
       <FilterSidebar onFilter={handleFilter} onReset={handleReset} />
 
       {/* Main content */}
@@ -254,27 +320,47 @@ export default function DashboardPage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold">Dashboard</h1>
-              <p className="text-gray-400 text-sm mt-1">Keyword frequency & article insights</p>
+              <h1 className="text-3xl font-bold">{t("title")}</h1>
+              <p className="text-gray-400 text-sm mt-1">{t("subtitle")}</p>
             </div>
             <button
               onClick={runBatch}
               disabled={processing}
               className="px-4 py-2 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/30 rounded-xl text-sm font-medium transition disabled:opacity-40"
             >
-              {processing ? "Processing..." : "▶ Run Sentiment Batch"}
+              {processing ? t("processing") : t("runBatch")}
             </button>
           </div>
 
           {msg && <p className="text-xs text-green-400 text-center">{msg}</p>}
 
+          {/* Onboarding — only shown when no articles exist yet */}
+          {!loading && status?.total === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-2xl border border-blue-500/20 bg-blue-500/5 px-6 py-5 flex flex-col gap-3"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">👋</span>
+                <p className="text-sm font-medium text-white">{t("welcome")}</p>
+              </div>
+              <div className="flex flex-col gap-2 text-xs text-gray-400">
+                <p>{t("step1")}</p>
+                <p>{t("step2")}</p>
+                <p>{t("step3")}</p>
+                <p>{t("step4")}</p>
+              </div>
+              <p className="text-[10px] text-blue-400/60">{t("welcomeNote")}</p>
+            </motion.div>
+          )}
+
           {/* Active filter notice */}
           {(filters.keyword || filters.dateFrom || filters.dateTo || filters.source || filters.sentiment) && (
             <div className="text-xs text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-2">
-              Showing filtered results
+              {t("filteredResults")}
               {filters.keyword   && <> · keyword: <strong>"{filters.keyword}"</strong></>}
-              {filters.source    && <> · source: <strong>{filters.source === "googleNews" ? "Google News" : "PTT"}</strong></>}
-              {filters.sentiment && <> · sentiment: <strong>{filters.sentiment}</strong></>}
+              {filters.source    && <> · source: <strong>{{ googleNews: "Google News", ptt: "PTT", youtube: "YouTube" }[filters.source] || filters.source}</strong></>}
               {filters.dateFrom  && <> · from: <strong>{filters.dateFrom}</strong></>}
               {filters.dateTo    && <> · to: <strong>{filters.dateTo}</strong></>}
             </div>
@@ -284,9 +370,9 @@ export default function DashboardPage() {
           {status && (
             <div className="grid grid-cols-3 gap-4">
               {[
-                { label: "Total articles", value: status.total },
-                { label: "Analyzed",       value: status.analyzed,   color: "text-green-400" },
-                { label: "Pending",        value: status.unanalyzed, color: "text-yellow-400" },
+                { label: t("totalArticles"), value: status.total },
+                { label: t("analyzed"),      value: status.analyzed,   color: "text-green-400" },
+                { label: t("pending"),       value: status.unanalyzed, color: "text-yellow-400" },
               ].map((s, i) => (
                 <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
                   <ArticleCard className="p-4 text-center">
@@ -302,11 +388,11 @@ export default function DashboardPage() {
 
             {/* Keyword frequency */}
             <ArticleCard className="flex flex-col gap-3">
-              <p className="text-xs text-gray-500 uppercase tracking-wider">Keyword frequency</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wider">{t("keywordFreq")}</p>
               {loading ? (
-                <p className="text-gray-600 text-sm text-center py-8">Loading...</p>
+                <p className="text-gray-600 text-sm text-center py-8">{t("loading")}</p>
               ) : keywords.length === 0 ? (
-                <p className="text-gray-600 text-sm text-center py-8">No keywords found</p>
+                <p className="text-gray-600 text-sm text-center py-8">{t("noKeywords")}</p>
               ) : (
                 <div className="flex flex-col gap-2">
                   {keywords.map(([kw, count], i) => (
@@ -319,11 +405,11 @@ export default function DashboardPage() {
             {/* Sentiment breakdown */}
             <ArticleCard className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-500 uppercase tracking-wider">Sentiment breakdown</p>
-                <span className="text-[10px] text-gray-600 italic">Overall corpus</span>
+                <p className="text-xs text-gray-500 uppercase tracking-wider">{t("sentimentBreakdown")}</p>
+                <span className="text-[10px] text-gray-600 italic">{t("overallCorpus")}</span>
               </div>
               {loading ? (
-                <p className="text-gray-600 text-sm text-center py-8">Loading...</p>
+                <p className="text-gray-600 text-sm text-center py-8">{t("loading")}</p>
               ) : (
                 <div className="flex flex-col gap-3 mt-2">
                   {Object.entries(overallSentiment).map(([label, count], i) => {
@@ -348,7 +434,7 @@ export default function DashboardPage() {
                     );
                   })}
                   {Object.keys(overallSentiment).length === 0 && (
-                    <p className="text-gray-600 text-sm text-center py-8">No analyzed articles yet — run batch first</p>
+                    <p className="text-gray-600 text-sm text-center py-8">{t("noAnalyzed")}</p>
                   )}
                 </div>
               )}
@@ -376,20 +462,20 @@ export default function DashboardPage() {
           </div>
 
           {/* Trend Prediction */}
-            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-5">
-              <TrendPredictionPanel />
-            </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur p-5">
+            <TrendPredictionPanel />
+          </div>
 
           {/* Reports */}
           <ArticleCard className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wider">Weekly Reports</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wider">{t("weeklyReports")}</p>
                 <button
                   onClick={() => setShowReports(v => !v)}
                   className="text-[10px] text-gray-600 hover:text-gray-400 border border-white/10 hover:border-white/20 rounded-lg px-2 py-0.5 transition"
                 >
-                  {showReports ? "Hide ▲" : "Show ▼"}
+                  {showReports ? t("hide") : t("show")}
                 </button>
               </div>
               <button
@@ -397,7 +483,7 @@ export default function DashboardPage() {
                 disabled={genReport}
                 className="px-3 py-1.5 bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-500/30 rounded-xl text-xs font-medium transition disabled:opacity-40"
               >
-                {genReport ? "Generating..." : "⚡ Generate Now"}
+                {genReport ? t("generating") : t("generateNow")}
               </button>
             </div>
 
@@ -406,67 +492,81 @@ export default function DashboardPage() {
             {showReports && (
               <>
                 {reports.length === 0 ? (
-                  <p className="text-gray-600 text-sm text-center py-6">No reports yet — generate one or wait for Monday 8am</p>
+                  <p className="text-gray-600 text-sm text-center py-6">{t("noReports")}</p>
                 ) : (
                   <div className="flex flex-col gap-3">
                     {reports.map((r, i) => (
-                  <motion.div
-                    key={r._id}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="p-4 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 font-medium uppercase">
-                          {r.type}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {new Date(r.period?.from).toLocaleDateString()} – {new Date(r.period?.to).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-gray-600">{new Date(r.createdAt).toLocaleString()}</span>
-                    </div>
-
-                    {r.stats && (
-                      <div className="grid grid-cols-4 gap-2">
-                        {[
-                          { label: "Total",    value: r.stats.total,    color: "text-white" },
-                          { label: "Positive", value: r.stats.positive, color: "text-green-400" },
-                          { label: "Negative", value: r.stats.negative, color: "text-red-400" },
-                          { label: "Neutral",  value: r.stats.neutral,  color: "text-yellow-400" },
-                        ].map((s) => (
-                          <div key={s.label} className="text-center p-2 rounded-lg bg-white/5">
-                            <p className={`text-lg font-bold ${s.color}`}>{s.value ?? 0}</p>
-                            <p className="text-[10px] text-gray-500">{s.label}</p>
+                      <motion.div
+                        key={r._id}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className="p-4 rounded-xl bg-white/5 border border-white/10 flex flex-col gap-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 font-medium uppercase">
+                              {r.type}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(r.period?.from).toLocaleDateString()} – {new Date(r.period?.to).toLocaleDateString()}
+                            </span>
                           </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {r.narrative && (
-                      <p className="text-xs text-gray-400 leading-relaxed border-l-2 border-indigo-500/40 pl-3">
-                        {r.narrative}
-                      </p>
-                    )}
-
-                    {r.topArticles?.length > 0 && (
-                      <div className="flex flex-col gap-1">
-                        <p className="text-[10px] text-gray-600 uppercase tracking-wider">Top Articles</p>
-                        {r.topArticles.map((a, j) => (
-                          <div key={j} className="flex items-center justify-between gap-2 text-xs">
-                            <a href={a.url} target="_blank" rel="noopener noreferrer"
-                              className="text-gray-400 hover:text-white truncate transition">{a.title}</a>
-                            <SentimentBadge label={a.sentiment} />
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-gray-600">{new Date(r.createdAt).toLocaleString()}</span>
+                            <button
+                              onClick={() => exportReportCSV(r)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600/20 hover:bg-green-600/35 border border-green-500/30 text-green-400 text-xs font-medium transition"
+                            >
+                              ⬇ CSV
+                            </button>
+                            <button
+                              onClick={() => exportReportPDF(r)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/30 text-indigo-400 text-xs font-medium transition"
+                            >
+                              🖨 PDF
+                            </button>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-              </div>
-            )}
+                        </div>
+
+                        {r.stats && (
+                          <div className="grid grid-cols-4 gap-2">
+                            {[
+                      { label: t("totalArticles"), value: r.stats.total,    color: "text-white" },
+                      { label: t("positive"),      value: r.stats.positive, color: "text-green-400" },
+                      { label: t("negative"),      value: r.stats.negative, color: "text-red-400" },
+                      { label: t("neutral"),       value: r.stats.neutral,  color: "text-yellow-400" },
+                            ].map((s) => (
+                              <div key={s.label} className="text-center p-2 rounded-lg bg-white/5">
+                                <p className={`text-lg font-bold ${s.color}`}>{s.value ?? 0}</p>
+                                <p className="text-[10px] text-gray-500">{s.label}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {r.narrative && (
+                          <p className="text-xs text-gray-400 leading-relaxed border-l-2 border-indigo-500/40 pl-3">
+                            {r.narrative}
+                          </p>
+                        )}
+
+                        {r.topArticles?.length > 0 && (
+                          <div className="flex flex-col gap-1">
+                            <p className="text-[10px] text-gray-600 uppercase tracking-wider">{t("topArticles")}</p>
+                            {r.topArticles.map((a, j) => (
+                              <div key={j} className="flex items-center justify-between gap-2 text-xs">
+                                <a href={a.url} target="_blank" rel="noopener noreferrer"
+                                  className="text-gray-400 hover:text-white truncate transition">{a.title}</a>
+                                <SentimentBadge label={a.sentiment} />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </ArticleCard>
@@ -474,7 +574,7 @@ export default function DashboardPage() {
           {/* Article list */}
           <ArticleCard className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-500 uppercase tracking-wider">Articles</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wider">{t("articles")}</p>
               <div className="flex items-center gap-2">
                 {/* Search mode toggle */}
                 <div className="flex items-center bg-white/5 border border-white/10 rounded-lg p-0.5">
@@ -482,13 +582,13 @@ export default function DashboardPage() {
                     onClick={() => { setSearchMode("keyword"); setSemanticResults(null); }}
                     className={`text-[10px] px-2.5 py-1 rounded-md transition font-medium ${searchMode === "keyword" ? "bg-white/10 text-white" : "text-gray-500 hover:text-gray-300"}`}
                   >
-                    Keyword
+                    {t("keyword")}
                   </button>
                   <button
                     onClick={() => setSearchMode("semantic")}
                     className={`text-[10px] px-2.5 py-1 rounded-md transition font-medium ${searchMode === "semantic" ? "bg-violet-500/30 text-violet-300" : "text-gray-500 hover:text-gray-300"}`}
                   >
-                    🧠 Semantic
+                    {t("semantic")}
                   </button>
                 </div>
                 {searchMode === "keyword" && (
@@ -497,9 +597,9 @@ export default function DashboardPage() {
                     onChange={e => { setFilterAnalyzed(e.target.value); setPage(1); }}
                     className="text-xs bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-gray-300 outline-none"
                   >
-                    <option value="">All</option>
-                    <option value="true">Analyzed</option>
-                    <option value="false">Pending</option>
+                    <option value="">{t("all")}</option>
+                    <option value="true">{t("analyzedFilter")}</option>
+                    <option value="false">{t("pendingFilter")}</option>
                   </select>
                 )}
               </div>
@@ -510,7 +610,7 @@ export default function DashboardPage() {
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Search by meaning, e.g. 半導體供應鏈 or chip shortage impact..."
+                  placeholder={t("semanticPlaceholder")}
                   value={semanticQuery}
                   onChange={e => setSemanticQuery(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleSemanticSearch()}
@@ -521,7 +621,7 @@ export default function DashboardPage() {
                   disabled={semanticLoading || !semanticQuery.trim()}
                   className="px-3 py-2 bg-violet-600/30 hover:bg-violet-600/50 border border-violet-500/30 rounded-lg text-xs font-medium transition disabled:opacity-40"
                 >
-                  {semanticLoading ? "Searching..." : "Search"}
+                  {semanticLoading ? t("searching") : t("search")}
                 </button>
               </div>
             )}
@@ -530,17 +630,17 @@ export default function DashboardPage() {
             {searchMode === "semantic" && semanticResults !== null && (
               <p className="text-[10px] text-violet-400">
                 {semanticResults.length > 0
-                  ? `${semanticResults.length} semantically similar articles found`
-                  : "No results — try a different query or run the embedding pipeline first"}
+                  ? `${semanticResults.length} ${t("semanticFound")}`
+                  : t("semanticEmpty")}
               </p>
             )}
 
             {/* Article rows */}
             {loading && searchMode === "keyword" ? (
-              <p className="text-gray-600 text-sm text-center py-8">Loading...</p>
+              <p className="text-gray-600 text-sm text-center py-8">{t("loading")}</p>
             ) : (semanticResults ?? articles).length === 0 ? (
               <p className="text-gray-600 text-sm text-center py-8">
-                {searchMode === "semantic" && semanticResults === null ? "Enter a query above to search semantically" : "No articles found"}
+                {searchMode === "semantic" && semanticResults === null ? t("semanticHint") : t("noArticles")}
               </p>
             ) : (
               <div className="flex flex-col gap-2">
@@ -563,7 +663,6 @@ export default function DashboardPage() {
                           {a.keywords?.slice(0, 3).map(k => (
                             <span key={k} className="text-[10px] px-1.5 py-0.5 bg-white/5 rounded text-gray-500">{k}</span>
                           ))}
-                          {/* Similarity score badge for semantic results */}
                           {a.score !== undefined && (
                             <span className="text-[10px] px-1.5 py-0.5 bg-violet-500/15 border border-violet-500/20 rounded text-violet-400">
                               {Math.round(a.score * 100)}% match
@@ -573,9 +672,8 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         {a.analyzed ? <SentimentBadge label={a.sentiment?.label} /> : (
-                          <span className="text-[10px] text-gray-600 border border-white/10 rounded-full px-2 py-0.5">pending</span>
+                          <span className="text-[10px] text-gray-600 border border-white/10 rounded-full px-2 py-0.5">{t("pending_badge")}</span>
                         )}
-                        {/* Similar articles button */}
                         {a.analyzed && (
                           <button
                             onClick={() => handleShowSimilar(a)}
@@ -586,7 +684,7 @@ export default function DashboardPage() {
                                 : "border-white/10 text-gray-600 hover:text-gray-300 hover:border-white/20"
                             }`}
                           >
-                            ∿ Similar
+                            {t("similar")}
                           </button>
                         )}
                       </div>
@@ -600,11 +698,11 @@ export default function DashboardPage() {
                         exit={{ opacity: 0, height: 0 }}
                         className="mx-3 mb-2 px-3 py-2 rounded-lg bg-violet-500/5 border border-violet-500/15"
                       >
-                        <p className="text-[10px] text-violet-400 mb-2 uppercase tracking-wider">Similar articles</p>
+                        <p className="text-[10px] text-violet-400 mb-2 uppercase tracking-wider">{t("similarArticles")}</p>
                         {similarLoading ? (
-                          <p className="text-[10px] text-gray-600 py-2">Finding similar articles...</p>
+                          <p className="text-[10px] text-gray-600 py-2">{t("findingSimilar")}</p>
                         ) : similarArticles.length === 0 ? (
-                          <p className="text-[10px] text-gray-600 py-2">No similar articles found — embed more articles first</p>
+                          <p className="text-[10px] text-gray-600 py-2">{t("noSimilar")}</p>
                         ) : (
                           <div className="flex flex-col gap-1.5">
                             {similarArticles.map(s => (
@@ -632,10 +730,10 @@ export default function DashboardPage() {
             {searchMode === "keyword" && totalPages > 1 && (
               <div className="flex justify-center gap-2 mt-2">
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                  className="px-3 py-1 text-xs bg-white/5 rounded-lg disabled:opacity-30 hover:bg-white/10 transition">← Prev</button>
+                  className="px-3 py-1 text-xs bg-white/5 rounded-lg disabled:opacity-30 hover:bg-white/10 transition">{t("prev")}</button>
                 <span className="text-xs text-gray-500 px-2 py-1">{page} / {totalPages}</span>
                 <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                  className="px-3 py-1 text-xs bg-white/5 rounded-lg disabled:opacity-30 hover:bg-white/10 transition">Next →</button>
+                  className="px-3 py-1 text-xs bg-white/5 rounded-lg disabled:opacity-30 hover:bg-white/10 transition">{t("next")}</button>
               </div>
             )}
           </ArticleCard>
@@ -643,5 +741,13 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <ErrorBoundary>
+      <DashboardPageInner />
+    </ErrorBoundary>
   );
 }

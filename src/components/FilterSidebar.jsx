@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-
+import { useTranslations } from "next-intl";
 /**
  * FilterSidebar
  *
@@ -9,27 +9,32 @@ import { useState } from "react";
  *   onReset()                                                  — called when user clears all filters
  */
 
-const SOURCES = [
-  { value: "",           label: "All Sources" },
+export default function FilterSidebar({ onFilter, onReset }) {
+  const t = useTranslations("filter");
+
+    const SOURCES = [
+  { value: "",           label: t("allSources") },
   { value: "googleNews", label: "Google News" },
   { value: "ptt",        label: "PTT" },
+  { value: "youtube",    label: "YouTube" },
 ];
 
 const SENTIMENTS = [
-  { value: "",         label: "All",      dot: "#4a5a7a" },
-  { value: "POSITIVE", label: "Positive", dot: "#4ade80" },
-  { value: "NEGATIVE", label: "Negative", dot: "#f87171" },
-  { value: "NEUTRAL",  label: "Neutral",  dot: "#facc15" },
+  { value: "",         label: t("all"),      dot: "#4a5a7a" },
+  { value: "POSITIVE", label: t("positive"), dot: "#4ade80" },
+  { value: "NEGATIVE", label: t("negative"), dot: "#f87171" },
+  { value: "NEUTRAL",  label: t("neutral"),  dot: "#facc15" },
 ];
 
 const CREDIBILITIES = [
-  { value: "",            label: "All",          dot: "#4a5a7a" },
-  { value: "credible",    label: "✅ Credible",   dot: "#4ade80" },
-  { value: "suspicious",  label: "⚠️ Suspicious", dot: "#fbbf24" },
-  { value: "likely_fake", label: "🚨 Likely Fake", dot: "#f87171" },
+  { value: "",            label: t("all"),         dot: "#4a5a7a" },
+  { value: "credible",    label: t("credible"),    dot: "#4ade80" },
+  { value: "suspicious",  label: t("suspicious"),  dot: "#fbbf24" },
+  { value: "likely_fake", label: t("likelyFake"),  dot: "#f87171" },
 ];
 
-export default function FilterSidebar({ onFilter, onReset }) {
+
+
   const [keyword, setKeyword]         = useState("");
   const [dateFrom, setDateFrom]       = useState("");
   const [dateTo, setDateTo]           = useState("");
@@ -135,16 +140,16 @@ export default function FilterSidebar({ onFilter, onReset }) {
           {/* Header */}
           <div>
             <div style={{ color: "#e2e8f0", fontWeight: 600, fontSize: 14, letterSpacing: 0.5 }}>
-              Search & Filter
+              {t("title")}
             </div>
             <div style={{ color: "#3d4a6b", fontSize: 11, marginTop: 2 }}>
-              Narrow down articles
+              {t("subtitle")}
             </div>
           </div>
 
           {/* Keyword */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={labelStyle}>Keyword</label>
+            <label style={labelStyle}>{t("keyword")}</label>
             <div style={{ position: "relative" }}>
               <span style={{
                 position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
@@ -152,7 +157,7 @@ export default function FilterSidebar({ onFilter, onReset }) {
               }}>🔍</span>
               <input
                 type="text"
-                placeholder="Search articles..."
+                placeholder={t("placeholder")}
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleApply()}
@@ -163,7 +168,7 @@ export default function FilterSidebar({ onFilter, onReset }) {
 
           {/* Source */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={labelStyle}>Source</label>
+            <label style={labelStyle}>{t("source")}</label>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {SOURCES.map((s) => (
                 <ToggleButton
@@ -179,7 +184,7 @@ export default function FilterSidebar({ onFilter, onReset }) {
 
           {/* Sentiment */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={labelStyle}>Sentiment</label>
+            <label style={labelStyle}>{t("sentiment")}</label>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {SENTIMENTS.map((s) => (
                 <ToggleButton
@@ -195,7 +200,7 @@ export default function FilterSidebar({ onFilter, onReset }) {
 
           {/* Credibility */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={labelStyle}>Credibility</label>
+          <label style={labelStyle}>{t("credibility")}</label>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {CREDIBILITIES.map((c) => (
                 <ToggleButton
@@ -211,10 +216,10 @@ export default function FilterSidebar({ onFilter, onReset }) {
 
           {/* Date range */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={labelStyle}>Date Range</label>
+            <label style={labelStyle}>{t("dateRange")}</label>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <div>
-                <div style={sublabelStyle}>From</div>
+                <div style={sublabelStyle}>{t("from")}</div>
                 <input
                   type="date"
                   value={dateFrom}
@@ -224,7 +229,7 @@ export default function FilterSidebar({ onFilter, onReset }) {
                 />
               </div>
               <div>
-                <div style={sublabelStyle}>To</div>
+                <div style={sublabelStyle}>{t("to")}</div>
                 <input
                   type="date"
                   value={dateTo}
@@ -271,13 +276,13 @@ export default function FilterSidebar({ onFilter, onReset }) {
           {/* Buttons */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <button onClick={handleApply} style={applyBtnStyle}>
-              Apply Filters
-            </button>
-            {hasFilters && (
-              <button onClick={handleReset} style={resetBtnStyle}>
-                Clear All
-              </button>
-            )}
+              {t("apply")}
+            </button>           
+             {hasFilters && (
+        <button onClick={handleReset} style={resetBtnStyle}>
+          {t("clear")}
+        </button>          
+        )}
           </div>
 
         </div>
@@ -285,6 +290,9 @@ export default function FilterSidebar({ onFilter, onReset }) {
     </aside>
   );
 }
+
+
+
 
 // ─── Shared toggle button ──────────────────────────────────────────────────────
 function ToggleButton({ label, active, dotColor, onClick }) {

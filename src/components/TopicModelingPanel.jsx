@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 
 // Proxy routes in src/app/api/topics/* forward to the Express backend
 const TOPICS_BASE = "/api/topics";
@@ -13,13 +14,6 @@ function getAuthHeaders() {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
-
-const DAYS_OPTIONS = [
-  { value: 7,   label: "7 days" },
-  { value: 30,  label: "30 days" },
-  { value: 90,  label: "90 days" },
-  { value: 365, label: "All time" },
-];
 
 // Emoji icons for each topic label
 const TOPIC_ICONS = {
@@ -36,6 +30,15 @@ const TOPIC_ICONS = {
 };
 
 export default function TopicModelingPanel() {
+  const t = useTranslations("topics");
+
+  const DAYS_OPTIONS = [
+    { value: 7,   label: "7 days" },
+    { value: 30,  label: "30 days" },
+    { value: 90,  label: "90 days" },
+    { value: 365, label: t("allTime") },
+  ];
+
   const [status, setStatus]           = useState(null);
   const [topics, setTopics]           = useState([]);
   const [days, setDays]               = useState(30);
@@ -117,7 +120,7 @@ export default function TopicModelingPanel() {
       ? Math.round((status.clustered / status.total) * 100)
       : 0;
   const topicCount = status?.distribution?.length ?? (topics.length || "—");
-  const maxTotal   = Math.max(...topics.map((t) => t.total), 1);
+  const maxTotal   = Math.max(...topics.map((tp) => tp.total), 1);
 
   return (
     <div className="topic-panel">
@@ -126,7 +129,7 @@ export default function TopicModelingPanel() {
       <div className="tp-header">
         <div className="tp-title-group">
           <span className="tp-title-icon">🧩</span>
-          <p className="tp-title">Topic Modeling</p>
+          <p className="tp-title">{t("title")}</p>
         </div>
         <div className="tp-controls">
           <select
@@ -146,7 +149,7 @@ export default function TopicModelingPanel() {
             <span className={`tp-btn-icon ${running ? "tp-spin" : ""}`}>
               {running ? "↻" : "▶"}
             </span>
-            {running ? "Running…" : "Run pipeline"}
+            {running ? t("running") : t("run")}
           </button>
         </div>
       </div>
@@ -155,14 +158,14 @@ export default function TopicModelingPanel() {
       <div className="tp-cards">
         {[
           {
-            label: "Analyzed articles",
+            label: t("analyzed"),
             value: loadingStatus ? "…" : (status ? status.total.toLocaleString() : "—"),
             sub: null,
             icon: "📰",
             accent: "#378ADD",
           },
           {
-            label: "Clustered",
+            label: t("clustered"),
             value: loadingStatus ? "…" : (status ? status.clustered.toLocaleString() : "—"),
             sub: status && !loadingStatus ? `${pct}% coverage` : null,
             icon: "🏷️",
@@ -170,14 +173,14 @@ export default function TopicModelingPanel() {
             highlight: true,
           },
           {
-            label: "Unclustered",
+            label: t("unclustered"),
             value: loadingStatus ? "…" : (status ? status.unclustered.toLocaleString() : "—"),
             sub: null,
             icon: "❓",
             accent: "#F09595",
           },
           {
-            label: "Topic clusters",
+            label: t("clusters"),
             value: loadingStatus ? "…" : String(topicCount),
             sub: null,
             icon: "🗂️",
@@ -218,7 +221,7 @@ export default function TopicModelingPanel() {
         <div className="tp-dist-header">
           <p className="tp-dist-title">Sentiment breakdown by topic</p>
           <span className="tp-dist-period">
-            {days === 365 ? "All time" : `Last ${days} days`}
+            {days === 365 ? t("allTime") : `Last ${days} days`}
           </span>
         </div>
 
@@ -238,13 +241,13 @@ export default function TopicModelingPanel() {
         ) : (
           <>
             <div className="tp-bars">
-              {topics.map((t, i) => {
-                const pPos = t.total > 0 ? Math.round((t.positive / t.total) * 100) : 0;
-                const pNeu = t.total > 0 ? Math.round((t.neutral  / t.total) * 100) : 0;
+              {topics.map((tp, i) => {
+                const pPos = tp.total > 0 ? Math.round((tp.positive / tp.total) * 100) : 0;
+                const pNeu = tp.total > 0 ? Math.round((tp.neutral  / tp.total) * 100) : 0;
                 const pNeg = Math.max(0, 100 - pPos - pNeu);
-                const barW = Math.round((t.total / maxTotal) * 100);
-                const conf = Math.round((t.avgConfidence || 0) * 100);
-                const icon = TOPIC_ICONS[t.label] || "📌";
+                const barW = Math.round((tp.total / maxTotal) * 100);
+                const conf = Math.round((tp.avgConfidence || 0) * 100);
+                const icon = TOPIC_ICONS[tp.label] || "📌";
                 const dominantSentiment = pPos >= pNeu && pPos >= pNeg
                   ? "positive"
                   : pNeg >= pPos && pNeg >= pNeu
@@ -253,20 +256,19 @@ export default function TopicModelingPanel() {
 
                 return (
                   <div
-                    key={t.label}
+                    key={tp.label}
                     className="tp-bar-row"
                     style={{ animationDelay: `${i * 60}ms` }}
                   >
                     {/* Label */}
                     <div className="tp-bar-label">
                       <span className="tp-bar-icon">{icon}</span>
-                      <span className="tp-bar-text" title={t.label}>{t.label}</span>
+                      <span className="tp-bar-text" title={tp.label}>{tp.label}</span>
                     </div>
 
                     {/* Bar + confidence */}
                     <div className="tp-bar-track-wrap">
                       <div className="tp-bar-track">
-                        {/* Background proportional to maxTotal */}
                         <div
                           className="tp-bar-fill-outer"
                           style={{ width: `${barW}%` }}
@@ -297,7 +299,7 @@ export default function TopicModelingPanel() {
                     {/* Count */}
                     <div className="tp-bar-count">
                       <span className={`tp-sentiment-dot tp-sentiment-dot--${dominantSentiment}`} />
-                      <span>{t.total}</span>
+                      <span>{tp.total}</span>
                     </div>
                   </div>
                 );
@@ -307,9 +309,9 @@ export default function TopicModelingPanel() {
             {/* Legend */}
             <div className="tp-legend">
               {[
-                { color: "#5DCAA5", label: "Positive", cls: "pos" },
-                { color: "#B4B2A9", label: "Neutral",  cls: "neu" },
-                { color: "#F09595", label: "Negative", cls: "neg" },
+                { color: "#5DCAA5", label: t("positive"), cls: "pos" },
+                { color: "#B4B2A9", label: t("neutral"),  cls: "neu" },
+                { color: "#F09595", label: t("negative"), cls: "neg" },
               ].map((l) => (
                 <span key={l.label} className="tp-legend-item">
                   <span className="tp-legend-dot" style={{ background: l.color }} />

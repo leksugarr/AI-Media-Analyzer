@@ -1,4 +1,4 @@
-import { crawlArticle, generateReport, suggestKeywords, runCredibilityPipeline, runTopicPipeline, runStancePipeline } from "./crawler.js";
+import { crawlArticle, generateReport, suggestKeywords, runCredibilityPipeline, runTopicPipeline, runStancePipeline, groqWithRetry } from "./crawler.js";
 import express from "express";
 import Groq from "groq-sdk";
 import { tavily } from "@tavily/core";import bcrypt from "bcryptjs";
@@ -7,7 +7,7 @@ import crypto from "crypto";
 import * as lineSdk from "@line/bot-sdk";
 
 
-import { validateText } from "./middleware.js";
+import { validateText, sanitizeKeyword } from "./middleware.js";
 import { embedQuery, cosineSimilarity, runEmbeddingPipeline } from "./embedder.js";
 import { crawlPTTBoard, crawlPTTArticle } from "./crawlers/ptt.js";          // ← fixed path
 import { Analysis, User, Conversation, Article, Report, KeywordSuggestion, WatchlistKeyword } from "./db.js";
@@ -21,8 +21,7 @@ import {
 
 
 const router = express.Router();
-const JWT_SECRET = "dev_secret_change_in_production";
-
+const JWT_SECRET = process.env.JWT_SECRET;
   
   /* ================================================
    STANCE ANALYSIS
@@ -84,9 +83,9 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY });
 async function analyzeSentiment(text) {
   const input = text.slice(0, 200);
-  const completion = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    max_tokens: 20,
+const completion = await groqWithRetry(() => groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+    max_tokens: 1000,
     messages: [
       {
         role: "system",
@@ -94,7 +93,7 @@ async function analyzeSentiment(text) {
       },
       { role: "user", content: input },
     ],
-  });
+  }));
   const raw = completion.choices[0].message.content.trim();
   try {
     return JSON.parse(raw);
@@ -161,25 +160,24 @@ router.post("/analyze", validateText, async (req, res) => {
   const { text } = req.body;
 
   try {
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        {
-          role: "system",
-          content: `You are an article analyzer. Given an article in any language, respond ONLY with a valid JSON object, no markdown:
-{
-  "summary": "2-3 sentence summary in the same language as the article",
-  "sentiment": {
-    "label": "POSITIVE or NEGATIVE or NEUTRAL",
-    "score": 0.0
-  },
-  "keywords": ["keyword1", "keyword2", "keyword3"]
-}`,
-        },
-        { role: "user", content: text },
-      ],
-    });
-
+    const completion = await groqWithRetry(() => groq.chat.completions.create({
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            {
+              role: "system",
+              content: `You are an article analyzer. Given an article in any language, respond ONLY with a valid JSON object, no markdown:
+    {
+      "summary": "2-3 sentence summary in the same language as the article",
+      "sentiment": {
+        "label": "POSITIVE or NEGATIVE or NEUTRAL",
+        "score": 0.0
+      },
+      "keywords": ["keyword1", "keyword2", "keyword3"]
+    }`,
+            },
+            { role: "user", content: text },
+          ],
+        }));
     const raw = completion.choices[0].message.content.replace(/```json|```/g, "").trim();
     let data;
     try {
@@ -271,11 +269,10 @@ Always respond in the same language the user uses. Always valid JSON, no markdow
           : m.content?.reply || JSON.stringify(m.content),
     }));
 
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [systemPrompt, ...payload],
-    });
-
+      const completion = await groqWithRetry(() => groq.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages: [systemPrompt, ...payload],
+          }));
     const raw = completion.choices[0].message.content.replace(/```json|```/g, "").trim();
     let data;
     try {
@@ -413,8 +410,8 @@ router.get("/history", async (req, res) => {
  * POST /api/news/search
  * Body: { keywords: string|string[], locale?: string, limit?: number, save?: boolean }
  */
-router.post("/news/search", async (req, res) => {
-  const { keywords, locale = "zh-TW", limit = 20, save = false } = req.body;
+router.post("/news/search", sanitizeKeyword, async (req, res) => {
+    const { keywords, locale = "zh-TW", limit = 20, save = false } = req.body;
 
   if (!keywords || (Array.isArray(keywords) && keywords.length === 0))
     return res.status(400).json({ error: "keywords is required" });
@@ -478,8 +475,8 @@ router.post("/news/topic", async (req, res) => {
  * GET /api/news/latest
  * Query: keyword?, crawler?, analyzed?, limit?, page?
  */
-router.get("/news/latest", async (req, res) => {
-  const { keyword, crawler, analyzed, sentiment, credibility, limit = 20, page = 1 } = req.query;
+router.get("/news/latest", sanitizeKeyword, async (req, res) => {
+    const { keyword, crawler, analyzed, sentiment, credibility, limit = 20, page = 1 } = req.query;
 
   const clampedLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
   const skip = (Math.max(Number(page) || 1, 1) - 1) * clampedLimit;
@@ -637,8 +634,8 @@ router.get("/watchlist", async (req, res) => {
 });
 
 /** POST /api/watchlist — manually add a keyword */
-router.post("/watchlist", async (req, res) => {
-  const { keyword, locale = "zh-TW", label } = req.body;
+router.post("/watchlist", sanitizeKeyword, async (req, res) => {
+    const { keyword, locale = "zh-TW", label } = req.body;
   if (!keyword?.trim()) return res.status(400).json({ error: "keyword is required" });
   try {
     const entry = await WatchlistKeyword.create({
@@ -836,8 +833,8 @@ router.get("/heatmap", async (req, res) => {
  *  Body: { query: string, limit?: number }
  *  Embeds the query then scores all embedded articles by cosine similarity.
  */
-router.post("/semantic-search", async (req, res) => {
-  const { query, limit = 10 } = req.body;
+router.post("/semantic-search", sanitizeKeyword, async (req, res) => {
+    const { query, limit = 10 } = req.body;
   if (!query?.trim()) return res.status(400).json({ error: "query is required" });
 
   try {
@@ -967,8 +964,10 @@ router.post(
     for (const event of events) {
       if (event.type !== "message" || event.message.type !== "text") continue;
 
-      const text = event.message.text.trim();
-      const replyToken = event.replyToken;
+    const text = event.message.text.trim();
+    const replyToken = event.replyToken;
+    const senderId = event.source?.userId || event.source?.groupId || "unknown";
+    console.log(`[LINE] Message from: ${senderId} | text: "${text}"`);
 
       try {
         // ── 搜尋 <keyword> ──────────────────────────────────────────────────
@@ -1018,15 +1017,15 @@ router.post(
 
         // ── Groq fallback ───────────────────────────────────────────────────
         } else {
-          const completion = await groq.chat.completions.create({
+      const completion = await groqWithRetry(() => groq.chat.completions.create({
             model: "llama-3.3-70b-versatile",
             max_tokens: 200,
             messages: [
               { role: "system", content: "你是一個輿情分析助手。用繁體中文簡短回答，最多150字。" },
               { role: "user", content: text },
             ],
-          });
-          await lineReply(replyToken, completion.choices[0].message.content.trim());
+          }));
+                    await lineReply(replyToken, completion.choices[0].message.content.trim());
         }
       } catch (err) {
         console.error("[LINE] Event handling error:", err.message);
@@ -1237,8 +1236,8 @@ router.get("/trends", async (req, res) => {
       .map(s => `${s.date}: ${s.count} articles, pos=${s.positive}, neg=${s.negative}, neu=${s.neutral}`)
       .join("\n");
 
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+const completion = await groqWithRetry(() => groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
       max_tokens: 500,
       messages: [
         {
@@ -1265,7 +1264,7 @@ Reply ONLY with JSON (no markdown):
           content: `Keyword filter: ${keyword || "none (all articles)"}\nLast ${days} days:\n${seriesText}`,
         },
       ],
-    });
+    }));
 
     const raw = completion.choices[0].message.content.trim();
     let forecast = null;
@@ -1287,39 +1286,145 @@ Reply ONLY with JSON (no markdown):
    STANCE ANALYSIS
    ================================================ */
 
-router.get("/stance/status", async (req, res) => {
+// router.get("/stance/status", async (req, res) => {
+//   try {
+//     const [total, unscored] = await Promise.all([
+//       Article.countDocuments({ analyzed: true }),
+//       Article.countDocuments({ analyzed: true, $or: [{ "stance.label": { $exists: false } }, { "stance.label": null }] }),
+//     ]);
+
+//     const distribution = await Article.aggregate([
+//       { $match: { analyzed: true, "stance.label": { $ne: null } } },
+//       { $group: { _id: "$stance.label", count: { $sum: 1 } } },
+//       { $sort: { count: -1 } },
+//     ]);
+
+//     res.json({
+//       total,
+//       scored: total - unscored,
+//       unscored,
+//       distribution: distribution.map(d => ({ label: d._id, count: d.count })),
+//     });
+//   } catch (err) {
+//     res.status(500).json({ error: "Failed to fetch stance status" });
+//   }
+// });
+
+// router.post("/stance/run", async (req, res) => {
+//   const limit = Math.min(Number(req.body?.limit) || 50, 200);
+//   try {
+//     runStancePipeline(limit).catch(err =>
+//       console.error("[Stance] Manual run failed:", err.message)
+//     );
+//     res.json({ message: `Stance pipeline started for up to ${limit} articles` });
+//   } catch (err) {
+//     res.status(500).json({ error: "Failed to start stance pipeline" });
+//   }
+// });
+
+/* ================================================
+   SENTIMENT SPIKE ALERTS
+   ================================================ */
+
+/**
+ * GET /api/alerts/status
+ * Returns current sentiment snapshot to preview spike conditions.
+ */
+router.get("/alerts/status", async (req, res) => {
   try {
-    const [total, unscored] = await Promise.all([
-      Article.countDocuments({ analyzed: true }),
-      Article.countDocuments({ analyzed: true, $or: [{ "stance.label": { $exists: false } }, { "stance.label": null }] }),
+    const now          = new Date();
+    const twoHoursAgo  = new Date(now - 2 * 60 * 60 * 1000);
+    const eightHoursAgo = new Date(now - 8 * 60 * 60 * 1000);
+
+    const [recent, baseline] = await Promise.all([
+      Article.find({ analyzed: true, fetchedAt: { $gte: twoHoursAgo } }).select("sentiment").lean(),
+      Article.find({ analyzed: true, fetchedAt: { $gte: eightHoursAgo, $lt: twoHoursAgo } }).select("sentiment").lean(),
     ]);
 
-    const distribution = await Article.aggregate([
-      { $match: { analyzed: true, "stance.label": { $ne: null } } },
-      { $group: { _id: "$stance.label", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ]);
+    const negRatio = (arr) => {
+      const neg = arr.filter(a => a.sentiment?.label === "NEGATIVE").length;
+      return arr.length > 0 ? Math.round((neg / arr.length) * 1000) / 10 : 0;
+    };
+
+    const recentNeg   = negRatio(recent);
+    const baselineNeg = negRatio(baseline);
 
     res.json({
-      total,
-      scored: total - unscored,
-      unscored,
-      distribution: distribution.map(d => ({ label: d._id, count: d.count })),
+      recentWindow:   { articles: recent.length,   negativePercent: recentNeg },
+      baselineWindow: { articles: baseline.length,  negativePercent: baselineNeg },
+      spike:          Math.round((recentNeg - baselineNeg) * 10) / 10,
+      spikeThreshold: 15,
+      alertConfigured: !!(process.env.LINE_CHANNEL_ACCESS_TOKEN && process.env.LINE_ALERT_TARGET_ID),
     });
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch stance status" });
+    res.status(500).json({ error: "Failed to fetch alert status" });
   }
 });
 
-router.post("/stance/run", async (req, res) => {
-  const limit = Math.min(Number(req.body?.limit) || 50, 200);
+/**
+ * POST /api/alerts/test
+ * Manually trigger a test LINE push message (for verifying config).
+ */
+router.post("/alerts/test", async (req, res) => {
+  const token    = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const targetId = process.env.LINE_ALERT_TARGET_ID;
+
+  if (!token || !targetId) {
+    return res.status(400).json({ error: "LINE_CHANNEL_ACCESS_TOKEN or LINE_ALERT_TARGET_ID not configured in .env" });
+  }
+
   try {
-    runStancePipeline(limit).catch(err =>
-      console.error("[Stance] Manual run failed:", err.message)
-    );
-    res.json({ message: `Stance pipeline started for up to ${limit} articles` });
+    const fetchFn = (await import("node-fetch")).default;
+    const response = await fetchFn("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        to: targetId,
+        messages: [{ type: "text", text: "✅ 輿情警報系統測試成功！\n\n系統已正確設定，將在情緒急升時自動通知您。" }],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      return res.status(502).json({ error: `LINE API error: ${err}` });
+    }
+
+    res.json({ success: true, message: "Test alert sent to LINE" });
   } catch (err) {
-    res.status(500).json({ error: "Failed to start stance pipeline" });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+/* ================================================
+   YOUTUBE CRAWLER
+   ================================================ */
+
+router.post("/crawl/youtube", async (req, res) => {
+  const { keyword, channelId, limit = 15, locale = "zh-TW" } = req.body;
+  try {
+    const { searchYouTube, fetchYouTubeChannel } = await import("./crawlers/youtube.js");
+    let videos;
+
+    if (channelId) {
+      videos = await fetchYouTubeChannel(channelId, { limit });
+    } else if (keyword) {
+      videos = await searchYouTube(keyword, { locale, limit });
+    } else {
+      return res.status(400).json({ error: "keyword or channelId required" });
+    }
+
+    const docs = videos.map(v => ({ ...v, crawler: "youtube" }));
+    const result = await Article.insertMany(docs, { ordered: false }).catch(err => err);
+    const insertedCount = result?.insertedCount ?? result?.result?.nInserted ?? 0;
+
+    res.json({ inserted: insertedCount, skipped: docs.length - insertedCount, total: docs.length });
+  } catch (err) {
+    console.error("[YouTube] Manual crawl error:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
