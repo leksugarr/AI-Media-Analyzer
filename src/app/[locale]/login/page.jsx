@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations, useLocale } from "next-intl";
 import ArticleCard from "@/components/ArticleCard";
 import Button from "@/components/Button";
 import { useAuth } from "@/context/AuthContext";
@@ -15,6 +16,8 @@ export default function LoginPage() {
 
   const { login } = useAuth();
   const router = useRouter();
+  const t = useTranslations("login");
+  const locale = useLocale();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -37,7 +40,7 @@ export default function LoginPage() {
       if (res.ok && data.success) {
         login(data.user, data.token); // save to AuthContext + localStorage
         setMessage({ text: "Login successful! Redirecting...", type: "success" });
-        setTimeout(() => router.push("/"), 800);
+        setTimeout(() => router.push(`/${locale}`), 800);
       } else {
         setMessage({ text: data.message || "Login failed", type: "error" });
       }
@@ -60,51 +63,46 @@ export default function LoginPage() {
         transition={{ duration: 0.3 }}
         className="max-w-md w-full"
       >
-        <ArticleCard className="p-6 space-y-5">
-          <h1 className="text-2xl font-bold text-center mb-2">Login</h1>
-
-          <input
-            type="email"
-            placeholder="Email"
-            className="w-full p-3 bg-black/20 rounded-xl outline-none border border-white/10 focus:border-white/30 transition"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-
-          <input
-            type="password"
-            placeholder="Password"
-            className="w-full p-3 bg-black/20 rounded-xl outline-none border border-white/10 focus:border-white/30 transition"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-
-          <Button
-            onClick={handleLogin}
-            disabled={loading}
-            className="relative w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 transition group overflow-hidden"
-          >
-            <span className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 blur-lg opacity-0 group-hover:opacity-40 transition" />
-            <span className="relative z-10 font-semibold">
-              {loading ? "Logging in..." : "Login"}
-            </span>
-          </Button>
-
-          {message.text && (
-            <p className={`text-center text-sm ${message.type === "error" ? "text-red-400" : "text-green-400"}`}>
-              {message.text}
-            </p>
-          )}
-
-          <p className="text-center text-gray-400 text-sm">
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-blue-400 hover:underline">
-              Sign Up
-            </Link>
-          </p>
-        </ArticleCard>
+<ArticleCard className="p-6 space-y-5">
+  <h1 className="text-2xl font-bold text-center mb-2">{t("title")}</h1>
+  <input
+    type="email"
+    placeholder={t("email")}
+    className="w-full p-3 bg-black/20 rounded-xl outline-none border border-white/10 focus:border-white/30 transition"
+    value={email}
+    onChange={(e) => setEmail(e.target.value)}
+    onKeyDown={handleKeyDown}
+  />
+  <input
+    type="password"
+    placeholder={t("password")}
+    className="w-full p-3 bg-black/20 rounded-xl outline-none border border-white/10 focus:border-white/30 transition"
+    value={password}
+    onChange={(e) => setPassword(e.target.value)}
+    onKeyDown={handleKeyDown}
+  />
+  <Button
+    onClick={handleLogin}
+    disabled={loading}
+    className="relative w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 transition group overflow-hidden"
+  >
+    <span className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 blur-lg opacity-0 group-hover:opacity-40 transition" />
+    <span className="relative z-10 font-semibold">
+      {loading ? t("loading") : t("submit")}
+    </span>
+  </Button>
+  {message.text && (
+    <p className={`text-center text-sm ${message.type === "error" ? "text-red-400" : "text-green-400"}`}>
+      {message.text}
+    </p>
+  )}
+  <p className="text-center text-gray-400 text-sm">
+    {t("noAccount")}{" "}
+    <Link href={`/${locale}/signup`} className="text-blue-400 hover:underline">
+      {t("signup")}
+    </Link>
+  </p>
+</ArticleCard>
       </motion.div>
     </div>
   );

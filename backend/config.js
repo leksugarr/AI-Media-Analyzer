@@ -12,8 +12,8 @@ export const config = {
 
   // API Keys
   GROQ_API_KEY: process.env.GROQ_API_KEY,
-    TAVILY_API_KEY: process.env.TAVILY_API_KEY,
-
+TAVILY_API_KEY: process.env.TAVILY_API_KEY,
+  JWT_SECRET: process.env.JWT_SECRET,
 
   // Limits
   MAX_TEXT_LENGTH: 5000,
@@ -25,8 +25,10 @@ export const config = {
 
 // Validate required environment variables
 export const validateConfig = () => {
-  if (!process.env.GROQ_API_KEY) {
-    throw new Error("⚠️  GROQ_API_KEY is required");
+if (!process.env.JWT_SECRET) {
+    throw new Error("⚠️  JWT_SECRET is required");
+  }
+  if (!process.env.GROQ_API_KEY) {    throw new Error("⚠️  GROQ_API_KEY is required");
   }
   if (!process.env.TAVILY_API_KEY) {
     console.warn("⚠️  TAVILY_API_KEY not set - real time search disabled");

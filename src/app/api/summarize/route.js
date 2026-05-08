@@ -30,7 +30,7 @@ try {
   });
   if (!res.ok) {
 
-    return Response.json({error: err.error || "Analysis failed"}, { status: res.status });
+    return Response.json({error: "Analysis failed"}, { status: res.status });
   }return Response.json(await res.json(), { status: 200 });
 } catch(err) {
   console.error("Backend unreachable:", err.message);

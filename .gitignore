@@ -137,3 +137,8 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Project documentation (local reference only)
+PROJECT_BRIEF.md
+
+filetree.txt
