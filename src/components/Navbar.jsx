@@ -23,7 +23,6 @@ export default function Navbar() {
 
   const toggleLocale = () => {
     const nextLocale = locale === "en" ? "zh" : "en";
-    // Replace current locale prefix with new one
     const newPath = pathname.replace(`/${locale}`, `/${nextLocale}`);
     router.push(newPath);
   };
@@ -47,39 +46,36 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Menu */}
-            <div className="hidden md:flex items-center gap-8">
-              <Link href={`/${locale}`} className="hover:text-blue-400">
-                Home
+          <div className="hidden md:flex items-center gap-8">
+            <Link href={`/${locale}`} className="hover:text-blue-400">
+              Home
+            </Link>
+            <Link href={`/${locale}/dashboard`} className="hover:text-blue-400">
+              {t("dashboard")}
+            </Link>
+            {user ? (
+              <>
+                <span className="text-xs text-gray-400">{user.email}</span>
+                <button
+                  onClick={handleLogout}
+                  className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-red-500/20 hover:text-red-400 text-sm transition"
+                >
+                  {t("logout")}
+                </button>
+              </>
+            ) : (
+              <Link href={`/${locale}/login`} className="hover:text-blue-400">
+                {t("login")}
               </Link>
-              <Link href={`/${locale}/dashboard`} className="hover:text-blue-400">
-                {t("dashboard")}
-              </Link>
-              <Link href={`/${locale}/about`} className="hover:text-blue-400">
-                {t("about")}
-              </Link>
-              {user ? (
-                <>
-                  <span className="text-xs text-gray-400">{user.email}</span>
-                  <button
-                    onClick={handleLogout}
-                    className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-red-500/20 hover:text-red-400 text-sm transition"
-                  >
-                    {t("logout")}
-                  </button>
-                </>
-              ) : (
-                <Link href={`/${locale}/login`} className="hover:text-blue-400">
-                  {t("login")}
-                </Link>
-              )}
-              {/* Language switcher */}
-              <button
-                onClick={toggleLocale}
-                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-sm transition font-medium"
-              >
-                {locale === "en" ? "中文" : "EN"}
-              </button>
-            </div>
+            )}
+            <button
+              onClick={toggleLocale}
+              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-sm transition font-medium"
+            >
+              {locale === "en" ? "中文" : "EN"}
+            </button>
+          </div>
+
           {/* Hamburger Button */}
           <motion.button
             className="md:hidden p-2 rounded-lg bg-neutral-800/50 backdrop-blur-lg"
@@ -108,8 +104,8 @@ export default function Navbar() {
             <Link href={`/${locale}`} className="text-lg hover:text-blue-400" onClick={() => setOpen(false)}>
               Home
             </Link>
-            <Link href={`/${locale}/about`} className="text-lg hover:text-blue-400" onClick={() => setOpen(false)}>
-              {t("about")}
+            <Link href={`/${locale}/dashboard`} className="text-lg hover:text-blue-400" onClick={() => setOpen(false)}>
+              {t("dashboard")}
             </Link>
             {user ? (
               <>
@@ -123,14 +119,13 @@ export default function Navbar() {
                 {t("login")}
               </Link>
             )}
-            {/* Language switcher */}
             <button
               onClick={() => { toggleLocale(); setOpen(false); }}
               className="text-lg hover:text-blue-400 text-left"
             >
               {locale === "en" ? "切換至中文" : "Switch to EN"}
-            </button>      
-    </motion.div>
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
     </>
