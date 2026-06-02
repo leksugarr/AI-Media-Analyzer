@@ -1,7 +1,6 @@
 // src/app/api/auth/login/route.js
 // This Next.js API route proxies login to your Express backend.
 // If you don't have a real backend yet, it falls back to mock auth.
-
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
 
 export async function POST(request) {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const BACKEND = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const BACKEND = process.env.BACKEND_URL || "http://localhost:5000";
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url);

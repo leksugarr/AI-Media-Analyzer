@@ -8,7 +8,7 @@ export async function GET(request) {
   if (searchParams.get("days"))    params.set("days",    searchParams.get("days"));
 
   try {
-    const res  = await fetch(`http://localhost:5000/api/trends?${params}`);
+    const res  = await fetch(`${process.env.BACKEND_URL}/api/trends?${params}`);
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
   } catch (err) {

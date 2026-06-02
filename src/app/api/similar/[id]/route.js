@@ -1,4 +1,4 @@
-const BACKEND = "http://localhost:5000/api";
+const BACKEND = `${process.env.BACKEND_URL}/api`;
 
 export async function GET(req, { params }) {
   const { id } = await params;
