@@ -469,9 +469,9 @@ const KEYWORD_WATCHLIST = [
 
 /** YouTube channels/keywords to crawl every cycle */
 const YOUTUBE_WATCHLIST = [
-  { keyword: "台灣新聞",   locale: "zh-TW", limit: 10 },
-  { keyword: "AI 人工智慧", locale: "zh-TW", limit: 10 },
-  { keyword: "台積電",     locale: "zh-TW", limit: 8  },
+  { keyword: "台灣新聞",   locale: "zh-TW", limit: 3 },
+  { keyword: "AI 人工智慧", locale: "zh-TW", limit: 3 },
+  { keyword: "台積電",     locale: "zh-TW", limit: 3  },
 ];
 
 /** Topic feeds to auto-pull every cycle */
@@ -496,7 +496,7 @@ export async function runCrawlCycle() {
   // 1. Keyword crawls
   for (const entry of dynamicKeywords) {
     try {
-      const articles = await searchGoogleNews(entry.keywords, { locale: entry.locale, limit: 15 });
+      const articles = await searchGoogleNews(entry.keywords, { locale: entry.locale, limit: 5});
 let docs = articles.map((a) => ({
         ...a,
         crawler: "googleNews",
@@ -776,7 +776,7 @@ Keep keywords concise (1-4 words). Mix Chinese and English based on the content 
  * Default: every 2 hours. Override with NEWS_CRON_SCHEDULE env var.
  */
 export function startNewsScheduler() {
-  const schedule = process.env.NEWS_CRON_SCHEDULE || "0 */2 * * *";
+  const schedule = process.env.NEWS_CRON_SCHEDULE || "0 8 * * *";
 
   if (!cron.validate(schedule)) {
     console.error(`[Scheduler] Invalid cron expression: "${schedule}" — not started`);
